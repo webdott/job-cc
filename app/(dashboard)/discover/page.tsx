@@ -154,10 +154,10 @@ export default function DiscoverPage() {
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
         <div className="flex items-center gap-2 flex-1">
           <Search className="h-4 w-4 text-muted-foreground/70 shrink-0" />
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-center gap-2 flex-1 min-w-[280px]">
             <span className="text-xs text-muted-foreground shrink-0">Min score: {minScore}%</span>
             <input
               type="range"
@@ -166,29 +166,31 @@ export default function DiscoverPage() {
               step={10}
               value={minScore}
               onChange={(e) => setMinScore(Number(e.target.value))}
-              className="flex-1 accent-blue-500"
+              className="flex-1 accent-blue-500 min-w-[190px]"
             />
           </div>
         </div>
-        <button
-          onClick={() => setRemoteOnly((v) => !v)}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
-            remoteOnly
-              ? "bg-blue-500/20 border-blue-500/30 text-blue-400"
-              : "bg-muted border-border text-muted-foreground hover:border-border"
-          )}
-        >
-          <Wifi className="h-3.5 w-3.5" />
-          Remote
-        </button>
-        <button
-          onClick={() => setShowManual((v) => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted border border-border text-muted-foreground hover:border-border transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add manually
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setRemoteOnly((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+              remoteOnly
+                ? "bg-blue-500/20 border-blue-500/30 text-blue-400"
+                : "bg-muted border-border text-muted-foreground hover:border-border"
+            )}
+          >
+            <Wifi className="h-3.5 w-3.5" />
+            Remote
+          </button>
+          <button
+            onClick={() => setShowManual((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted border border-border text-muted-foreground hover:border-border transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add manually
+          </button>
+        </div>
       </div>
 
       {/* Manual add */}
