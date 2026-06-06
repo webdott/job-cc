@@ -84,9 +84,10 @@ export async function GET() {
   });
 
   // Average score of applications
-  const scores = applications
-    .map((a: App) => a.job?.evaluation?.overallScore)
-    .filter((s): s is number => s !== null && s !== undefined);
+  const scores = applications.flatMap((a: App) => {
+    const score = a.job?.evaluation?.overallScore;
+    return score != null ? [score] : [];
+  });
   const avgScore =
     scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
 
