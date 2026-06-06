@@ -49,7 +49,7 @@ const pwaConfig = withPWA({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverActions: { allowedOrigins: ["localhost:3000"] },
+    serverActions: { allowedOrigins: ["localhost:3000", "job-cc.vercel.app"] },
   },
   serverExternalPackages: ["pdf-parse", "mammoth"],
 };
