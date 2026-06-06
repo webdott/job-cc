@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import type { ApplicationWithJobAndEvaluation } from "@/types";
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -10,20 +9,24 @@ export async function GET() {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ stats: null });
 
-  const applications: ApplicationWithJobAndEvaluation[] = await prisma.application.findMany({
+  const applications = await prisma.application.findMany({
     where: { userId: user.id },
     include: { job: { include: { evaluation: true } }, evaluation: true },
     orderBy: { createdAt: "asc" },
   });
 
+  type App = (typeof applications)[number];
+
   const total = applications.length;
-  const applied = applications.filter((a) => a.stage !== "Saved").length;
-  const responded = applications.filter((a) =>
+  const applied = applications.filter((a: App) => a.stage !== "Saved").length;
+  const responded = applications.filter((a: App) =>
     ["Screening", "Interview", "Offer", "Rejected"].includes(a.stage)
   ).length;
-  const interviews = applications.filter((a) => ["Interview", "Offer"].includes(a.stage)).length;
-  const offers = applications.filter((a) => a.stage === "Offer").length;
-  const rejected = applications.filter((a) => a.stage === "Rejected").length;
+  const interviews = applications.filter((a: App) =>
+    ["Interview", "Offer"].includes(a.stage)
+  ).length;
+  const offers = applications.filter((a: App) => a.stage === "Offer").length;
+  const rejected = applications.filter((a: App) => a.stage === "Rejected").length;
 
   const responseRate = applied > 0 ? Math.round((responded / applied) * 100) : 0;
   const interviewRate = responded > 0 ? Math.round((interviews / responded) * 100) : 0;
@@ -32,19 +35,19 @@ export async function GET() {
   const funnel = [
     {
       stage: "Saved",
-      count: applications.filter((a) => a.stage === "Saved").length,
+      count: applications.filter((a: App) => a.stage === "Saved").length,
     },
     {
       stage: "Applied",
-      count: applications.filter((a) => a.stage === "Applied").length,
+      count: applications.filter((a: App) => a.stage === "Applied").length,
     },
     {
       stage: "Screening",
-      count: applications.filter((a) => a.stage === "Screening").length,
+      count: applications.filter((a: App) => a.stage === "Screening").length,
     },
     {
       stage: "Interview",
-      count: applications.filter((a) => a.stage === "Interview").length,
+      count: applications.filter((a: App) => a.stage === "Interview").length,
     },
     { stage: "Offer", count: offers },
     { stage: "Rejected", count: rejected },
@@ -54,7 +57,7 @@ export async function GET() {
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const byDay = dayNames.map((day, i) => ({
     day,
-    count: applications.filter((a) => new Date(a.createdAt).getDay() === i).length,
+    count: applications.filter((a: App) => new Date(a.createdAt).getDay() === i).length,
   }));
 
   // Weekly trend — last 8 weeks
@@ -67,11 +70,11 @@ export async function GET() {
     const label = `W${8 - i}`;
     return {
       week: label,
-      applied: applications.filter((a) => {
+      applied: applications.filter((a: App) => {
         const d = new Date(a.createdAt);
         return d >= weekStart && d < weekEnd && a.stage !== "Saved";
       }).length,
-      responses: applications.filter((a) => {
+      responses: applications.filter((a: App) => {
         const d = new Date(a.lastActivityAt);
         return (
           d >= weekStart && d < weekEnd && ["Screening", "Interview", "Offer"].includes(a.stage)
@@ -82,7 +85,7 @@ export async function GET() {
 
   // Average score of applications
   const scores = applications
-    .map((a) => a.job?.evaluation?.overallScore)
+    .map((a: App) => a.job?.evaluation?.overallScore)
     .filter((s): s is number => s !== null && s !== undefined);
   const avgScore =
     scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;

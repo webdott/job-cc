@@ -26,9 +26,11 @@ export async function GET(req: NextRequest) {
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
+  type JobItem = (typeof jobs)[number];
+
   // Filter by minScore after join
   const filtered = minScore
-    ? jobs.filter((j) => (j.evaluation?.overallScore ?? 0) >= minScore)
+    ? jobs.filter((j: JobItem) => (j.evaluation?.overallScore ?? 0) >= minScore)
     : jobs;
 
   const hasMore = filtered.length > limit;
