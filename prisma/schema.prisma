@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AtsType {
+  GREENHOUSE
+  ASHBY
+  LEVER
+  BAMBOOHR
+  TEAMTAILOR
+  WORKDAY
+  CUSTOM
+}
+
+enum JobStatus {
+  UNSEEN
+  SAVED
+  APPLIED
+  ARCHIVED
+}
+
+enum Recommendation {
+  APPLY
+  SKIP
+  MAYBE
+}
+
+model User {
+  id               String            @id @default(cuid())
+  clerkId          String            @unique
+  email            String            @unique
+  name             String?
+  preferences      Json              @default("{}")
+  pushSubscription Json?
+  createdAt        DateTime          @default(now())
+  resumes          Resume[]
+  portalConfigs    PortalConfig[]
+  jobs             Job[]
+  applications     Application[]
+  evaluations      JobEvaluation[]
+  interviewStories InterviewStory[]
+  pushSubscriptions PushSubscription[]
+}
+
+model Resume {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label            String
+  fileUrl          String
+  isActive         Boolean       @default(false)
+  parsedData       Json          @default("{}")
+  strengthScore    Int?
+  strengthFeedback String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  coverLetters     CoverLetter[]
+  pdfExports       PdfExport[]
+}
+
+model PortalConfig {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company             String
+  careersUrl          String
+  atsType             AtsType   @default(CUSTOM)
+  atsSlug             String?
+  titleFilterPositive String[]  @default([])
+  titleFilterNegative String[]  @default([])
+  isActive            Boolean   @default(true)
+  lastScannedAt       DateTime?
+  createdAt           DateTime  @default(now())
+  jobs                Job[]
+}
+
+model Job {
+  id             String         @id @default(cuid())
+  sourceUrl      String
+  sourceId       String?
+  title          String
+  company        String
+  location       String?
+  description    String
+  salaryMin      Int?
+  salaryMax      Int?
+  remote         Boolean        @default(false)
+  postedAt       DateTime?
+  fetchedAt      DateTime       @default(now())
+  status         JobStatus      @default(UNSEEN)
+  portalConfigId String?
+  portalConfig   PortalConfig?  @relation(fields: [portalConfigId], references: [id])
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evaluation     JobEvaluation?
+  applications   Application[]
+  pdfExports     PdfExport[]
+
+  @@unique([sourceUrl, userId])
+}
+
+model JobEvaluation {
+  id             String          @id @default(cuid())
+  jobId          String          @unique
+  job            Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  archetype      String?
+  blockA         Json?
+  blockB         Json?
+  blockC         Json?
+  blockD         Json?
+  blockE         Json?
+  blockF         Json?
+  blockG         Json?
+  overallScore   Float?
+  recommendation Recommendation?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  application    Application?
+}
+
+model Application {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId          String?
+  job            Job?           @relation(fields: [jobId], references: [id])
+  inlineJobData  Json?
+  stage          String         @default("Saved")
+  appliedAt      DateTime?
+  lastActivityAt DateTime       @default(now())
+  followUpAt     DateTime?
+  notes          String?
+  contacts       Json[]         @default([])
+  timelineEvents Json[]         @default([])
+  coverLetter    CoverLetter?
+  evaluationId   String?        @unique
+  evaluation     JobEvaluation? @relation(fields: [evaluationId], references: [id])
+  pdfExports     PdfExport[]
+  createdAt      DateTime       @default(now())
+}
+
+model CoverLetter {
+  id            String      @id @default(cuid())
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  resumeId      String
+  resume        Resume      @relation(fields: [resumeId], references: [id])
+  content       String
+  tone          String      @default("Professional")
+  versions      Json[]      @default([])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model InterviewStory {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                 String
+  situation             String
+  task                  String
+  action                String
+  result                String
+  reflection            String?
+  skills                String[] @default([])
+  usedInApplicationIds  String[] @default([])
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model PdfExport {
+  id            String   @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  resumeId      String
+  resume        Resume   @relation(fields: [resumeId], references: [id])
+  jobId         String?
+  job           Job?     @relation(fields: [jobId], references: [id])
+  filePath      String
+  keywords      String[] @default([])
+  createdAt     DateTime @default(now())
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
