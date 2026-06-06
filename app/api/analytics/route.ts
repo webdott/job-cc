@@ -31,10 +31,22 @@ export async function GET() {
 
   // Stage funnel
   const funnel = [
-    { stage: "Saved", count: applications.filter((a) => a.stage === "Saved").length },
-    { stage: "Applied", count: applications.filter((a) => a.stage === "Applied").length },
-    { stage: "Screening", count: applications.filter((a) => a.stage === "Screening").length },
-    { stage: "Interview", count: applications.filter((a) => a.stage === "Interview").length },
+    {
+      stage: "Saved",
+      count: applications.filter((a: { stage: string }) => a.stage === "Saved").length,
+    },
+    {
+      stage: "Applied",
+      count: applications.filter((a: { stage: string }) => a.stage === "Applied").length,
+    },
+    {
+      stage: "Screening",
+      count: applications.filter((a: { stage: string }) => a.stage === "Screening").length,
+    },
+    {
+      stage: "Interview",
+      count: applications.filter((a: { stage: string }) => a.stage === "Interview").length,
+    },
     { stage: "Offer", count: offers },
     { stage: "Rejected", count: rejected },
   ];
