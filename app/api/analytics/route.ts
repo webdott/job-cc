@@ -16,13 +16,15 @@ export async function GET() {
   });
 
   const total = applications.length;
-  const applied = applications.filter((a) => a.stage !== "Saved").length;
-  const responded = applications.filter((a) =>
+  const applied = applications.filter((a: { stage: string }) => a.stage !== "Saved").length;
+  const responded = applications.filter((a: { stage: string }) =>
     ["Screening", "Interview", "Offer", "Rejected"].includes(a.stage)
   ).length;
-  const interviews = applications.filter((a) => ["Interview", "Offer"].includes(a.stage)).length;
-  const offers = applications.filter((a) => a.stage === "Offer").length;
-  const rejected = applications.filter((a) => a.stage === "Rejected").length;
+  const interviews = applications.filter((a: { stage: string }) =>
+    ["Interview", "Offer"].includes(a.stage)
+  ).length;
+  const offers = applications.filter((a: { stage: string }) => a.stage === "Offer").length;
+  const rejected = applications.filter((a: { stage: string }) => a.stage === "Rejected").length;
 
   const responseRate = applied > 0 ? Math.round((responded / applied) * 100) : 0;
   const interviewRate = responded > 0 ? Math.round((interviews / responded) * 100) : 0;
