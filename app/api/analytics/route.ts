@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import type { ApplicationWithJobAndEvaluation } from "@/types";
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -9,22 +10,20 @@ export async function GET() {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ stats: null });
 
-  const applications = await prisma.application.findMany({
+  const applications: ApplicationWithJobAndEvaluation[] = await prisma.application.findMany({
     where: { userId: user.id },
-    include: { job: { include: { evaluation: true } } },
+    include: { job: { include: { evaluation: true } }, evaluation: true },
     orderBy: { createdAt: "asc" },
   });
 
   const total = applications.length;
-  const applied = applications.filter((a: { stage: string }) => a.stage !== "Saved").length;
-  const responded = applications.filter((a: { stage: string }) =>
+  const applied = applications.filter((a) => a.stage !== "Saved").length;
+  const responded = applications.filter((a) =>
     ["Screening", "Interview", "Offer", "Rejected"].includes(a.stage)
   ).length;
-  const interviews = applications.filter((a: { stage: string }) =>
-    ["Interview", "Offer"].includes(a.stage)
-  ).length;
-  const offers = applications.filter((a: { stage: string }) => a.stage === "Offer").length;
-  const rejected = applications.filter((a: { stage: string }) => a.stage === "Rejected").length;
+  const interviews = applications.filter((a) => ["Interview", "Offer"].includes(a.stage)).length;
+  const offers = applications.filter((a) => a.stage === "Offer").length;
+  const rejected = applications.filter((a) => a.stage === "Rejected").length;
 
   const responseRate = applied > 0 ? Math.round((responded / applied) * 100) : 0;
   const interviewRate = responded > 0 ? Math.round((interviews / responded) * 100) : 0;
@@ -33,19 +32,19 @@ export async function GET() {
   const funnel = [
     {
       stage: "Saved",
-      count: applications.filter((a: { stage: string }) => a.stage === "Saved").length,
+      count: applications.filter((a) => a.stage === "Saved").length,
     },
     {
       stage: "Applied",
-      count: applications.filter((a: { stage: string }) => a.stage === "Applied").length,
+      count: applications.filter((a) => a.stage === "Applied").length,
     },
     {
       stage: "Screening",
-      count: applications.filter((a: { stage: string }) => a.stage === "Screening").length,
+      count: applications.filter((a) => a.stage === "Screening").length,
     },
     {
       stage: "Interview",
-      count: applications.filter((a: { stage: string }) => a.stage === "Interview").length,
+      count: applications.filter((a) => a.stage === "Interview").length,
     },
     { stage: "Offer", count: offers },
     { stage: "Rejected", count: rejected },
