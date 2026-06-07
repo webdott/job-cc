@@ -16,6 +16,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { MapPin, Wifi, GripVertical, ExternalLink, Trash2, Plus } from "lucide-react";
+import { ApplicationDetail } from "@/components/application-detail";
 
 const DEFAULT_STAGES = [
   { id: "Saved", label: "Saved", color: "bg-slate-500" },
@@ -76,10 +77,12 @@ function AppCard({
   app,
   isDragging,
   onDelete,
+  onSelect,
 }: {
   app: Application;
   isDragging?: boolean;
   onDelete: (id: string) => void;
+  onSelect?: (id: string) => void;
 }) {
   const title = app.job?.title ?? app.inlineJobData?.title ?? "Untitled Role";
   const company = app.job?.company ?? app.inlineJobData?.company ?? "Unknown Company";
@@ -87,8 +90,9 @@ function AppCard({
 
   return (
     <div
+      onClick={() => onSelect?.(app.id)}
       className={cn(
-        "bg-muted border border-border rounded-lg p-3 select-none",
+        "bg-muted border border-border rounded-lg p-3 select-none cursor-pointer hover:border-blue-500/40 transition-colors",
         isDragging && "opacity-50"
       )}
     >
@@ -141,7 +145,15 @@ function AppCard({
   );
 }
 
-function SortableCard({ app, onDelete }: { app: Application; onDelete: (id: string) => void }) {
+function SortableCard({
+  app,
+  onDelete,
+  onSelect,
+}: {
+  app: Application;
+  onDelete: (id: string) => void;
+  onSelect: (id: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: app.id,
   });
@@ -156,12 +168,13 @@ function SortableCard({ app, onDelete }: { app: Application; onDelete: (id: stri
       <div
         {...attributes}
         {...listeners}
+        onClick={(e) => e.stopPropagation()}
         className="absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10"
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50" />
       </div>
       <div className="pl-1">
-        <AppCard app={app} isDragging={isDragging} onDelete={onDelete} />
+        <AppCard app={app} isDragging={isDragging} onDelete={onDelete} onSelect={onSelect} />
       </div>
     </div>
   );
@@ -171,10 +184,12 @@ function KanbanColumn({
   stage,
   apps,
   onDelete,
+  onSelect,
 }: {
   stage: (typeof DEFAULT_STAGES)[0];
   apps: Application[];
   onDelete: (id: string) => void;
+  onSelect: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
@@ -201,7 +216,7 @@ function KanbanColumn({
       >
         <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
           {apps.map((app) => (
-            <SortableCard key={app.id} app={app} onDelete={onDelete} />
+            <SortableCard key={app.id} app={app} onDelete={onDelete} onSelect={onSelect} />
           ))}
         </SortableContext>
 
@@ -218,6 +233,7 @@ function KanbanColumn({
 export default function PipelinePage() {
   const queryClient = useQueryClient();
   const [activeApp, setActiveApp] = useState<Application | null>(null);
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -299,69 +315,78 @@ export default function PipelinePage() {
       : 0;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Pipeline</h1>
-          <p className="text-muted-foreground text-sm">
-            {totalActive} active · {responseRate}% response rate
-          </p>
-        </div>
-        <a
-          href="/discover"
-          className="flex items-center gap-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add job
-        </a>
-      </div>
-
-      {/* Kanban board */}
-      {isLoading ? (
-        <div className="flex gap-4 p-6 overflow-x-auto">
-          {DEFAULT_STAGES.map((s) => (
-            <div key={s.id} className="min-w-[260px] space-y-2">
-              <div className="h-5 bg-muted rounded w-20 mb-3 animate-pulse" />
-              {[1, 2].map((i) => (
-                <div key={i} className="h-20 bg-muted rounded-lg animate-pulse" />
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 p-6 overflow-x-auto flex-1">
-            {DEFAULT_STAGES.map((stage) => (
-              <KanbanColumn
-                key={stage.id}
-                stage={stage}
-                apps={getAppsForStage(stage.id)}
-                onDelete={(id) => deleteMutation.mutate(id)}
-              />
-            ))}
-          </div>
-
-          <DragOverlay>
-            {activeApp && (
-              <div className="rotate-2 opacity-90 w-[260px]">
-                <AppCard app={activeApp} onDelete={() => {}} />
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && apps.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center">
-            <p className="text-muted-foreground/70 text-sm mb-2">Your pipeline is empty</p>
-            <p className="text-muted-foreground/50 text-xs">
-              Go to Discover and save jobs to add them here
+    <div className="flex h-full overflow-hidden">
+      {/* Left: Kanban */}
+      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">Pipeline</h1>
+            <p className="text-muted-foreground text-sm">
+              {totalActive} active · {responseRate}% response rate
             </p>
           </div>
+          <a
+            href="/discover"
+            className="flex items-center gap-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add job
+          </a>
         </div>
+
+        {/* Kanban board */}
+        {isLoading ? (
+          <div className="flex gap-4 p-6 overflow-x-auto">
+            {DEFAULT_STAGES.map((s) => (
+              <div key={s.id} className="min-w-[260px] space-y-2">
+                <div className="h-5 bg-muted rounded w-20 mb-3 animate-pulse" />
+                {[1, 2].map((i) => (
+                  <div key={i} className="h-20 bg-muted rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="flex gap-4 p-6 overflow-x-auto flex-1">
+              {DEFAULT_STAGES.map((stage) => (
+                <KanbanColumn
+                  key={stage.id}
+                  stage={stage}
+                  apps={getAppsForStage(stage.id)}
+                  onDelete={(id) => deleteMutation.mutate(id)}
+                  onSelect={(id) => setSelectedAppId((prev) => (prev === id ? null : id))}
+                />
+              ))}
+            </div>
+
+            <DragOverlay>
+              {activeApp && (
+                <div className="rotate-2 opacity-90 w-[260px]">
+                  <AppCard app={activeApp} onDelete={() => {}} />
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && apps.length === 0 && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-muted-foreground/70 text-sm mb-2">Your pipeline is empty</p>
+              <p className="text-muted-foreground/50 text-xs">
+                Go to Discover and save jobs to add them here
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Detail panel — desktop only inline, mobile is a bottom sheet in the component */}
+      {selectedAppId && (
+        <ApplicationDetail applicationId={selectedAppId} onClose={() => setSelectedAppId(null)} />
       )}
     </div>
   );

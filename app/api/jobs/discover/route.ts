@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
+import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
 
 interface RemotiveJob {
   id: number;
@@ -46,13 +47,19 @@ async function fetchRemotive() {
       title: j.title,
       company: j.company_name,
       location: j.candidate_required_location || "Remote",
-      description: j.description,
+      description: sanitizeJobDescription(j.description),
       remote: true,
-      postedAt: new Date(j.publication_date),
+      postedAt: validDate(j.publication_date),
     }));
   } catch {
     return [];
   }
+}
+
+function validDate(raw: string | number | undefined): Date | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 async function fetchArbeitnow() {
@@ -67,9 +74,9 @@ async function fetchArbeitnow() {
       title: j.title,
       company: j.company_name,
       location: j.location,
-      description: j.description,
+      description: stripToPlainText(j.description),
       remote: j.remote ?? false,
-      postedAt: new Date(j.published_at),
+      postedAt: validDate(String(j.published_at)),
     }));
   } catch {
     return [];
@@ -92,7 +99,7 @@ async function fetchHNHiring() {
     return (story.children ?? [])
       .slice(0, 20)
       .map((comment: { text: string; objectID: string }) => {
-        const text = comment.text?.replace(/<[^>]+>/g, "") ?? "";
+        const text = stripToPlainText(comment.text ?? "");
         const lines = text.split("\n").filter(Boolean);
         const firstLine = lines[0] ?? "";
 

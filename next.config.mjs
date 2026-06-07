@@ -51,7 +51,7 @@ const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: ["localhost:3000", "job-cc.vercel.app"] },
   },
-  serverExternalPackages: ["pdf-parse", "mammoth"],
+  serverExternalPackages: ["pdf-parse", "mammoth", "sanitize-html"],
 };
 
 export default pwaConfig(nextConfig);

@@ -85,4 +85,47 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Sanitized HTML job descriptions */
+  .job-description-prose p {
+    margin-bottom: 0.6em;
+  }
+  .job-description-prose ul,
+  .job-description-prose ol {
+    margin: 0.4em 0 0.6em 1.2em;
+    list-style: disc;
+  }
+  .job-description-prose ol {
+    list-style: decimal;
+  }
+  .job-description-prose li {
+    margin-bottom: 0.25em;
+  }
+  .job-description-prose strong,
+  .job-description-prose b {
+    color: hsl(var(--foreground) / 0.9);
+    font-weight: 600;
+  }
+  .job-description-prose h1,
+  .job-description-prose h2,
+  .job-description-prose h3,
+  .job-description-prose h4 {
+    font-weight: 600;
+    color: hsl(var(--foreground) / 0.9);
+    margin: 0.75em 0 0.35em;
+  }
+  .job-description-prose h2 {
+    font-size: 0.85em;
+  }
+  .job-description-prose h3 {
+    font-size: 0.8em;
+  }
+  .job-description-prose a {
+    color: hsl(217 91% 60%);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .job-description-prose a:hover {
+    color: hsl(217 91% 70%);
+  }
 }

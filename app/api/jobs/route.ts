@@ -7,35 +7,60 @@ export async function GET(req: NextRequest) {
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = await prisma.user.findUnique({ where: { clerkId } });
-  if (!user) return NextResponse.json({ jobs: [], nextCursor: null });
+  if (!user) return NextResponse.json({ jobs: [], nextCursor: null, total: 0 });
 
   const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status") ?? undefined;
   const minScore = searchParams.get("minScore") ? Number(searchParams.get("minScore")) : undefined;
-  const limit = Math.min(Number(searchParams.get("limit") ?? "20"), 50);
-  const cursor = searchParams.get("cursor") ?? undefined;
+  const remoteOnly = searchParams.get("remote") === "true";
+  const sortBy = (searchParams.get("sortBy") ?? "newest") as "newest" | "score";
+  const PAGE_SIZE = 20;
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const skip = (page - 1) * PAGE_SIZE;
 
-  const jobs = await prisma.job.findMany({
-    where: {
-      userId: user.id,
-      ...(status ? { status: status as "UNSEEN" | "SAVED" | "APPLIED" | "ARCHIVED" } : {}),
-    },
+  const where = {
+    userId: user.id,
+    ...(remoteOnly ? { remote: true } : {}),
+  };
+
+  // Fetch all matching jobs (we need to sort by score after join)
+  const allJobs = await prisma.job.findMany({
+    where,
     include: { evaluation: true },
     orderBy: { fetchedAt: "desc" },
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
 
-  type JobItem = (typeof jobs)[number];
+  type JobItem = (typeof allJobs)[number];
 
-  // Filter by minScore after join
+  // Filter by minScore
   const filtered = minScore
-    ? jobs.filter((j: JobItem) => (j.evaluation?.overallScore ?? 0) >= minScore)
-    : jobs;
+    ? allJobs.filter((j: JobItem) => (j.evaluation?.overallScore ?? 0) >= minScore)
+    : allJobs;
 
-  const hasMore = filtered.length > limit;
-  const page = filtered.slice(0, limit);
-  const nextCursor = hasMore ? page[page.length - 1]?.id : null;
+  // Sort
+  const sorted =
+    sortBy === "score"
+      ? [...filtered].sort(
+          (a, b) => (b.evaluation?.overallScore ?? -1) - (a.evaluation?.overallScore ?? -1)
+        )
+      : filtered; // already sorted by fetchedAt desc from Prisma
 
-  return NextResponse.json({ jobs: page, nextCursor });
+  const total = sorted.length;
+  const pageJobs = sorted.slice(skip, skip + PAGE_SIZE);
+  const hasMore = skip + PAGE_SIZE < total;
+
+  return NextResponse.json({ jobs: pageJobs, hasMore, total, page });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const user = await prisma.user.findUnique({ where: { clerkId } });
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const { id } = (await req.json()) as { id: string };
+
+  await prisma.job.deleteMany({ where: { id, userId: user.id } });
+
+  return NextResponse.json({ success: true });
 }
