@@ -86,14 +86,16 @@
     display: none;
   }
 
-  /* Sanitized HTML job descriptions — reset ALL browser defaults first */
+  /* Sanitized HTML job descriptions — override ALL browser + inline styles */
   .job-description-prose,
   .job-description-prose * {
-    color: hsl(var(--muted-foreground));
-    background: transparent;
+    color: hsl(var(--muted-foreground)) !important;
+    background: transparent !important;
+    background-color: transparent !important;
     font-size: 0.75rem;
     line-height: 1.6;
     box-sizing: border-box;
+    max-width: 100%;
   }
   .job-description-prose p {
     margin-bottom: 0.6em;
