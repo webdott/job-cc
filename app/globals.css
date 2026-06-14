@@ -86,7 +86,15 @@
     display: none;
   }
 
-  /* Sanitized HTML job descriptions */
+  /* Sanitized HTML job descriptions — reset ALL browser defaults first */
+  .job-description-prose,
+  .job-description-prose * {
+    color: hsl(var(--muted-foreground));
+    background: transparent;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    box-sizing: border-box;
+  }
   .job-description-prose p {
     margin-bottom: 0.6em;
   }
@@ -103,7 +111,7 @@
   }
   .job-description-prose strong,
   .job-description-prose b {
-    color: hsl(var(--foreground) / 0.9);
+    color: hsl(var(--foreground) / 0.85);
     font-weight: 600;
   }
   .job-description-prose h1,
@@ -111,14 +119,9 @@
   .job-description-prose h3,
   .job-description-prose h4 {
     font-weight: 600;
-    color: hsl(var(--foreground) / 0.9);
+    font-size: 0.8rem;
+    color: hsl(var(--foreground) / 0.85);
     margin: 0.75em 0 0.35em;
-  }
-  .job-description-prose h2 {
-    font-size: 0.85em;
-  }
-  .job-description-prose h3 {
-    font-size: 0.8em;
   }
   .job-description-prose a {
     color: hsl(217 91% 60%);

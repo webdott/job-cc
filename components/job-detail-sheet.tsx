@@ -3,7 +3,16 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { X, ExternalLink, MapPin, Wifi, DollarSign, Bookmark, Check } from "lucide-react";
+import {
+  X,
+  ExternalLink,
+  MapPin,
+  Wifi,
+  DollarSign,
+  Bookmark,
+  Check,
+  ArrowUpRight,
+} from "lucide-react";
 import { useState } from "react";
 
 interface JobEvaluation {
@@ -131,10 +140,10 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
       {/* Panel */}
       <div
         className={cn(
-          // Mobile: bottom sheet
-          "fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[90vh] flex flex-col",
-          // Desktop: right side panel
-          "md:relative md:bottom-auto md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
+          // Mobile: bottom sheet — stop above the bottom tab bar (h-16)
+          "fixed bottom-16 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col",
+          // Desktop: right side panel — full height, no offset needed
+          "md:bottom-0 md:relative md:bottom-auto md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
         )}
       >
         {/* Header */}
@@ -251,38 +260,50 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               Job Description
             </p>
-            <div className="bg-muted/30 border border-border rounded-xl p-4">
+            <div className="border border-border rounded-xl p-4 bg-transparent">
               <JobDescription text={job.description} />
             </div>
           </div>
         </div>
 
-        {/* Footer CTA */}
-        <div className="p-4 border-t border-border shrink-0">
+        {/* Footer CTAs */}
+        <div className="p-4 border-t border-border shrink-0 flex gap-2">
+          {/* Save to pipeline */}
           <button
             onClick={() => !saved && saveMutation.mutate(job.id)}
             disabled={saved || saveMutation.isPending}
             className={cn(
-              "w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors",
+              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors",
               saved
                 ? "bg-green-500/15 text-green-400 border border-green-500/20 cursor-default"
-                : "bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white"
+                : "bg-muted border border-border hover:border-blue-500/40 text-foreground disabled:opacity-60"
             )}
           >
             {saved ? (
               <>
                 <Check className="h-4 w-4" />
-                Saved to Pipeline
+                Saved
               </>
             ) : saveMutation.isPending ? (
               "Saving…"
             ) : (
               <>
                 <Bookmark className="h-4 w-4" />
-                Save to Pipeline
+                Save
               </>
             )}
           </button>
+
+          {/* Apply — opens the original job posting */}
+          <a
+            href={job.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+            Apply
+          </a>
         </div>
       </div>
     </>
