@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import {
   X,
   ExternalLink,
@@ -843,13 +844,16 @@ export function ApplicationDetail({ applicationId, onClose }: ApplicationDetailP
       />
 
       {/* Panel */}
-      <div
+      <motion.div
+        initial={{ opacity: 0, x: 40 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 40 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn(
           // Mobile: bottom sheet
           "fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[90vh] flex flex-col",
           // Desktop: right side panel
-          "md:relative md:bottom-auto md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0",
-          "transition-all duration-200"
+          "md:relative md:bottom-auto md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
         )}
       >
         {/* Header */}
@@ -937,7 +941,7 @@ export function ApplicationDetail({ applicationId, onClose }: ApplicationDetailP
             </>
           )}
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import {
   X,
   ExternalLink,
@@ -138,7 +139,11 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
       />
 
       {/* Panel */}
-      <div
+      <motion.div
+        initial={{ opacity: 0, x: 40 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 40 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn(
           // Mobile: bottom sheet — stop above the bottom tab bar (h-16)
           "fixed bottom-16 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col",
@@ -305,7 +310,7 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
             Apply
           </a>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }
