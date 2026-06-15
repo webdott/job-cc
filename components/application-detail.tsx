@@ -499,12 +499,17 @@ function OverviewTab({
   const [contacts, setContacts] = useState<Contact[]>(app.contacts ?? []);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteTimer, setNoteTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [reminderDate, setReminderDate] = useState(
+    app.followUpAt ? new Date(app.followUpAt).toISOString().slice(0, 10) : ""
+  );
+  const [reminderSaving, setReminderSaving] = useState(false);
 
   // Sync if app prop changes
   useEffect(() => {
     setNotes(app.notes ?? "");
     setContacts(app.contacts ?? []);
-  }, [app.id, app.notes, app.contacts]);
+    setReminderDate(app.followUpAt ? new Date(app.followUpAt).toISOString().slice(0, 10) : "");
+  }, [app.id, app.notes, app.contacts, app.followUpAt]);
 
   const patchApp = useCallback(
     async (patch: object) => {
@@ -534,6 +539,15 @@ function OverviewTab({
       }
     }, 1000);
     setNoteTimer(t);
+  };
+
+  const saveReminder = async (date: string) => {
+    setReminderSaving(true);
+    try {
+      await patchApp({ followUpAt: date || null });
+    } finally {
+      setReminderSaving(false);
+    }
   };
 
   const addContact = () => {
@@ -636,6 +650,51 @@ function OverviewTab({
           rows={4}
           className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder-muted-foreground/40 resize-none focus:outline-none focus:border-blue-500 transition-colors"
         />
+      </div>
+
+      {/* Follow-up Reminder */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-medium text-muted-foreground">Follow-up Reminder</p>
+          {reminderSaving && <span className="text-[10px] text-muted-foreground/60">Saving…</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={reminderDate}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setReminderDate(e.target.value)}
+            className="flex-1 bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-blue-500 transition-colors"
+          />
+          <button
+            onClick={() => void saveReminder(reminderDate)}
+            disabled={reminderSaving}
+            className="px-3 py-2 text-xs font-medium bg-muted border border-border rounded-xl hover:border-blue-500/50 text-foreground transition-colors disabled:opacity-60"
+          >
+            Set
+          </button>
+          {reminderDate && (
+            <button
+              onClick={() => {
+                setReminderDate("");
+                void saveReminder("");
+              }}
+              className="px-3 py-2 text-xs font-medium bg-muted border border-border rounded-xl hover:border-red-500/50 text-muted-foreground transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        {app.followUpAt && (
+          <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+            Reminder set for{" "}
+            {new Date(app.followUpAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </p>
+        )}
       </div>
 
       {/* Contacts */}
