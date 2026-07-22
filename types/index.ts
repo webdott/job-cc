@@ -74,7 +74,10 @@ export type ApplicationStage =
   | "Screening"
   | "Interview"
   | "Offer"
-  | "Rejected";
+  | "Rejected"
+  | "Ghosted"
+  | "Withdrawn"
+  | "Archived";
 
 // ─── Parsed resume ───────────────────────────────────────────────────────────
 

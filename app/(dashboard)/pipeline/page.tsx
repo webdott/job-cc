@@ -15,7 +15,19 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import { MapPin, Wifi, GripVertical, ExternalLink, Trash2, Plus } from "lucide-react";
+import {
+  MapPin,
+  Wifi,
+  GripVertical,
+  ExternalLink,
+  Trash2,
+  Plus,
+  MoreVertical,
+  Archive,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { ApplicationDetail } from "@/components/application-detail";
 
 const DEFAULT_STAGES = [
@@ -26,6 +38,14 @@ const DEFAULT_STAGES = [
   { id: "Offer", label: "Offer", color: "bg-green-500" },
   { id: "Rejected", label: "Rejected", color: "bg-red-500" },
 ];
+
+const INACTIVE_STAGES = [
+  { id: "Ghosted", label: "Ghosted", color: "bg-zinc-500" },
+  { id: "Withdrawn", label: "Withdrawn", color: "bg-orange-500" },
+  { id: "Archived", label: "Archived", color: "bg-neutral-500" },
+];
+
+const INACTIVE_STAGE_IDS = INACTIVE_STAGES.map((s) => s.id);
 
 interface Evaluation {
   overallScore: number | null;
@@ -78,15 +98,19 @@ function AppCard({
   isDragging,
   onDelete,
   onSelect,
+  onStageChange,
 }: {
   app: Application;
   isDragging?: boolean;
   onDelete: (id: string) => void;
   onSelect?: (id: string) => void;
+  onStageChange?: (id: string, stage: string) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const title = app.job?.title ?? app.inlineJobData?.title ?? "Untitled Role";
   const company = app.job?.company ?? app.inlineJobData?.company ?? "Unknown Company";
   const score = app.job?.evaluation?.overallScore ?? null;
+  const isInactive = INACTIVE_STAGE_IDS.includes(app.stage);
 
   return (
     <div
@@ -101,7 +125,19 @@ function AppCard({
           <p className="text-sm font-medium text-white truncate">{title}</p>
           <p className="text-xs text-muted-foreground truncate">{company}</p>
         </div>
-        <ScoreBadge score={score} />
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isInactive && (
+            <span
+              className={cn(
+                "text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white",
+                INACTIVE_STAGES.find((s) => s.id === app.stage)?.color
+              )}
+            >
+              {app.stage}
+            </span>
+          )}
+          <ScoreBadge score={score} />
+        </div>
       </div>
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-2">
@@ -130,6 +166,59 @@ function AppCard({
               <ExternalLink className="h-3 w-3" />
             </a>
           )}
+          {onStageChange && (
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((v) => !v);
+                }}
+                className="p-1 rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+              >
+                <MoreVertical className="h-3 w-3" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                    }}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-lg overflow-hidden min-w-[140px]">
+                    {isInactive ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStageChange(app.id, "Applied");
+                          setMenuOpen(false);
+                        }}
+                        className="flex items-center gap-1.5 w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Restore
+                      </button>
+                    ) : (
+                      INACTIVE_STAGES.map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStageChange(app.id, s.id);
+                            setMenuOpen(false);
+                          }}
+                          className="block w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                        >
+                          Mark as {s.label}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -149,10 +238,12 @@ function SortableCard({
   app,
   onDelete,
   onSelect,
+  onStageChange,
 }: {
   app: Application;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
+  onStageChange: (id: string, stage: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: app.id,
@@ -174,7 +265,13 @@ function SortableCard({
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50" />
       </div>
       <div className="pl-1">
-        <AppCard app={app} isDragging={isDragging} onDelete={onDelete} onSelect={onSelect} />
+        <AppCard
+          app={app}
+          isDragging={isDragging}
+          onDelete={onDelete}
+          onSelect={onSelect}
+          onStageChange={onStageChange}
+        />
       </div>
     </div>
   );
@@ -185,11 +282,13 @@ function KanbanColumn({
   apps,
   onDelete,
   onSelect,
+  onStageChange,
 }: {
   stage: (typeof DEFAULT_STAGES)[0];
   apps: Application[];
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
+  onStageChange: (id: string, stage: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
@@ -216,7 +315,13 @@ function KanbanColumn({
       >
         <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
           {apps.map((app) => (
-            <SortableCard key={app.id} app={app} onDelete={onDelete} onSelect={onSelect} />
+            <SortableCard
+              key={app.id}
+              app={app}
+              onDelete={onDelete}
+              onSelect={onSelect}
+              onStageChange={onStageChange}
+            />
           ))}
         </SortableContext>
 
@@ -234,6 +339,7 @@ export default function PipelinePage() {
   const queryClient = useQueryClient();
   const [activeApp, setActiveApp] = useState<Application | null>(null);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -304,7 +410,10 @@ export default function PipelinePage() {
     stageMutation.mutate({ id: draggedApp.id, stage: targetStage.id });
   }
 
-  const totalActive = apps.filter((a) => !["Offer", "Rejected"].includes(a.stage)).length;
+  const totalActive = apps.filter(
+    (a) => !["Offer", "Rejected", ...INACTIVE_STAGE_IDS].includes(a.stage)
+  ).length;
+  const inactiveApps = apps.filter((a) => INACTIVE_STAGE_IDS.includes(a.stage));
 
   const responseRate =
     apps.length > 0
@@ -326,14 +435,48 @@ export default function PipelinePage() {
               {totalActive} active · {responseRate}% response rate
             </p>
           </div>
-          <a
-            href="/discover"
-            className="flex items-center gap-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add job
-          </a>
+          <div className="flex items-center gap-2">
+            {inactiveApps.length > 0 && (
+              <button
+                onClick={() => setShowInactive((v) => !v)}
+                className="flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Archive className="h-4 w-4" />
+                Inactive ({inactiveApps.length})
+                {showInactive ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
+            )}
+            <a
+              href="/discover"
+              className="flex items-center gap-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add job
+            </a>
+          </div>
         </div>
+
+        {/* Inactive apps (Ghosted / Withdrawn / Archived) */}
+        {showInactive && inactiveApps.length > 0 && (
+          <div className="px-6 py-4 border-b border-border shrink-0 bg-card/30">
+            <div className="flex gap-3 overflow-x-auto">
+              {inactiveApps.map((app) => (
+                <div key={app.id} className="min-w-[260px] max-w-[260px]">
+                  <AppCard
+                    app={app}
+                    onDelete={(id) => deleteMutation.mutate(id)}
+                    onSelect={(id) => setSelectedAppId((prev) => (prev === id ? null : id))}
+                    onStageChange={(id, stage) => stageMutation.mutate({ id, stage })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Kanban board */}
         {isLoading ? (
@@ -357,6 +500,7 @@ export default function PipelinePage() {
                   apps={getAppsForStage(stage.id)}
                   onDelete={(id) => deleteMutation.mutate(id)}
                   onSelect={(id) => setSelectedAppId((prev) => (prev === id ? null : id))}
+                  onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
                 />
               ))}
             </div>

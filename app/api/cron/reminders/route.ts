@@ -12,7 +12,7 @@ webpush.setVapidDetails(
 
 // ── Stages that should not receive follow-up reminders ───────────────────────
 
-const TERMINAL_STAGES = ["Offer", "Rejected"];
+const TERMINAL_STAGES = ["Offer", "Rejected", "Ghosted", "Withdrawn", "Archived"];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
