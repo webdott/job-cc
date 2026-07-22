@@ -7,6 +7,7 @@ import { flashModel } from "@/lib/ai";
 import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
 import * as cheerio from "cheerio";
+import { stripToPlainText } from "@/lib/sanitize";
 
 const JobFieldsSchema = z.object({
   title: z.string(),
@@ -64,7 +65,7 @@ ${textContent}`,
       title: fields.title,
       company: fields.company,
       location: fields.location,
-      description: fields.description,
+      description: stripToPlainText(fields.description),
       salaryMin: fields.salaryMin,
       salaryMax: fields.salaryMax,
       remote: fields.remote,

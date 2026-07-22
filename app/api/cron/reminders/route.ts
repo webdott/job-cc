@@ -12,7 +12,7 @@ webpush.setVapidDetails(
 
 // ── Stages that should not receive follow-up reminders ───────────────────────
 
-const TERMINAL_STAGES = ["Offer", "Rejected"];
+const TERMINAL_STAGES = ["Offer", "Rejected", "Ghosted", "Withdrawn", "Archived"];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
           JSON.stringify({
             title: "Follow-up Reminder",
             body,
-            icon: "/icons/icon-192x192.png",
+            icon: "/icons/icon-192.png",
             url: "/pipeline",
           })
         );

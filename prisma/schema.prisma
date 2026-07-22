@@ -6,16 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum AtsType {
-  GREENHOUSE
-  ASHBY
-  LEVER
-  BAMBOOHR
-  TEAMTAILOR
-  WORKDAY
-  CUSTOM
-}
-
 enum JobStatus {
   UNSEEN
   SAVED
@@ -38,7 +28,6 @@ model User {
   pushSubscription Json?
   createdAt        DateTime          @default(now())
   resumes          Resume[]
-  portalConfigs    PortalConfig[]
   jobs             Job[]
   applications     Application[]
   evaluations      JobEvaluation[]
@@ -62,22 +51,6 @@ model Resume {
   pdfExports       PdfExport[]
 }
 
-model PortalConfig {
-  id                  String    @id @default(cuid())
-  userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company             String
-  careersUrl          String
-  atsType             AtsType   @default(CUSTOM)
-  atsSlug             String?
-  titleFilterPositive String[]  @default([])
-  titleFilterNegative String[]  @default([])
-  isActive            Boolean   @default(true)
-  lastScannedAt       DateTime?
-  createdAt           DateTime  @default(now())
-  jobs                Job[]
-}
-
 model Job {
   id             String         @id @default(cuid())
   sourceUrl      String
@@ -92,8 +65,6 @@ model Job {
   postedAt       DateTime?
   fetchedAt      DateTime       @default(now())
   status         JobStatus      @default(UNSEEN)
-  portalConfigId String?
-  portalConfig   PortalConfig?  @relation(fields: [portalConfigId], references: [id])
   userId         String
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   evaluation     JobEvaluation?

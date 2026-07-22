@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
         JSON.stringify({
           title: "Job Command Center",
           body,
-          icon: "/icons/icon-192x192.png",
+          icon: "/icons/icon-192.png",
           url: "/discover",
         })
       );
