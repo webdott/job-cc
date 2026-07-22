@@ -14,8 +14,6 @@ export type JobEvaluation = Prisma.JobEvaluationGetPayload<object>;
 
 export type CoverLetter = Prisma.CoverLetterGetPayload<object>;
 
-export type PortalConfig = Prisma.PortalConfigGetPayload<object>;
-
 export type InterviewStory = Prisma.InterviewStoryGetPayload<object>;
 
 export type PushSubscription = Prisma.PushSubscriptionGetPayload<object>;
@@ -65,7 +63,7 @@ export type ResumeWithCoverLetters = Prisma.ResumeGetPayload<{
 
 // ─── Enum re-exports ─────────────────────────────────────────────────────────
 
-export type { AtsType, JobStatus, Recommendation } from "@prisma/client";
+export type { JobStatus, Recommendation } from "@prisma/client";
 
 // ─── Application stage ───────────────────────────────────────────────────────
 // (stored as string in DB, these are the valid values)

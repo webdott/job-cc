@@ -35,7 +35,7 @@ const pwaConfig = withPWA({
       options: { cacheName: "next-static-js-assets", expiration: { maxEntries: 64, maxAgeSeconds: 24 * 60 * 60 } },
     },
     {
-      urlPattern: /\/api\/(?!scan|push\/).+/i,
+      urlPattern: /\/api\/(?!push\/).+/i,
       handler: "NetworkFirst",
       options: {
         cacheName: "api-cache",
