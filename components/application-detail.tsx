@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Sparkles,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -113,6 +114,23 @@ function timeAgo(iso: string) {
   return `${days}d ago`;
 }
 
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function coverLetterFileName(company: string | undefined, ext: string) {
+  const slug = (company ?? "cover-letter")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return `cover-letter-${slug || "untitled"}.${ext}`;
+}
+
 function ScoreBadge({
   score,
   recommendation,
@@ -139,9 +157,11 @@ function ScoreBadge({
 function CoverLetterTab({
   applicationId,
   initial,
+  company,
 }: {
   applicationId: string;
   initial: CoverLetterData | null;
+  company?: string;
 }) {
   const queryClient = useQueryClient();
   const [content, setContent] = useState(initial?.content ?? "");
@@ -149,6 +169,7 @@ function CoverLetterTab({
   const [streaming, setStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [versions, setVersions] = useState(initial?.versions ?? []);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -209,6 +230,25 @@ function CoverLetterTab({
     void navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const downloadTxt = () => {
+    downloadBlob(new Blob([content], { type: "text/plain" }), coverLetterFileName(company, "txt"));
+    setShowDownloadMenu(false);
+  };
+
+  const downloadDocx = async () => {
+    const { Document, Packer, Paragraph } = await import("docx");
+    const doc = new Document({
+      sections: [
+        {
+          children: content.split(/\n+/).map((line) => new Paragraph(line)),
+        },
+      ],
+    });
+    const blob = await Packer.toBlob(doc);
+    downloadBlob(blob, coverLetterFileName(company, "docx"));
+    setShowDownloadMenu(false);
   };
 
   return (
@@ -302,6 +342,36 @@ function CoverLetterTab({
               )}
               {copied ? "Copied!" : "Copy"}
             </button>
+          )}
+          {content && (
+            <div className="relative">
+              <button
+                onClick={() => setShowDownloadMenu((v) => !v)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </button>
+              {showDownloadMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowDownloadMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-card border border-border rounded-lg shadow-lg overflow-hidden min-w-[120px]">
+                    <button
+                      onClick={downloadTxt}
+                      className="block w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                    >
+                      As .txt
+                    </button>
+                    <button
+                      onClick={() => void downloadDocx()}
+                      className="block w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+                    >
+                      As .docx
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           {content && !streaming && (
             <button
@@ -935,7 +1005,11 @@ export function ApplicationDetail({ applicationId, onClose }: ApplicationDetailP
                 />
               )}
               {tab === "cover-letter" && (
-                <CoverLetterTab applicationId={app.id} initial={app.coverLetter} />
+                <CoverLetterTab
+                  applicationId={app.id}
+                  initial={app.coverLetter}
+                  company={app.job?.company ?? app.inlineJobData?.company}
+                />
               )}
               {tab === "interview-prep" && <InterviewPrepTab applicationId={app.id} />}
             </>
