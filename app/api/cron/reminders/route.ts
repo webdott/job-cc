@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
           JSON.stringify({
             title: "Follow-up Reminder",
             body,
-            icon: "/icons/icon-192x192.png",
+            icon: "/icons/icon-192.png",
             url: "/pipeline",
           })
         );
