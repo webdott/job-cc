@@ -180,7 +180,7 @@ export default function HomePage() {
                 return (
                   <div
                     key={job.id}
-                    onClick={() => router.push("/discover")}
+                    onClick={() => router.push(`/discover?jobId=${job.id}`)}
                     className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
                   >
                     <div className="min-w-0">

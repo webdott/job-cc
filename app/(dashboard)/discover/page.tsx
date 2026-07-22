@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
@@ -92,7 +93,16 @@ function JobCardSkeleton() {
 }
 
 export default function DiscoverPage() {
+  return (
+    <Suspense fallback={null}>
+      <DiscoverPageContent />
+    </Suspense>
+  );
+}
+
+function DiscoverPageContent() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const [minScore, setMinScore] = useState(0);
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"newest" | "score">("newest");
@@ -117,6 +127,28 @@ export default function DiscoverPage() {
       return res.json() as Promise<JobsResponse>;
     },
   });
+
+  // Deep-link support: ?jobId=... opens the detail panel directly (e.g. from the home dashboard)
+  const linkedJobId = searchParams.get("jobId");
+
+  const { data: linkedJobData } = useQuery<{ job: Job }>({
+    queryKey: ["job", linkedJobId],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${linkedJobId}`);
+      return res.json() as Promise<{ job: Job }>;
+    },
+    enabled: !!linkedJobId,
+  });
+
+  useEffect(() => {
+    if (!linkedJobId) return;
+    const fromList = data?.jobs.find((j) => j.id === linkedJobId);
+    if (fromList) {
+      setSelectedJob(fromList);
+    } else if (linkedJobData?.job) {
+      setSelectedJob(linkedJobData.job);
+    }
+  }, [linkedJobId, data, linkedJobData]);
 
   const scanMutation = useMutation<DiscoverResponse>({
     mutationFn: async () => {
