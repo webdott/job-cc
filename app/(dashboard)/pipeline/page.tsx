@@ -27,8 +27,57 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
+  Square,
+  CheckSquare,
+  Download,
+  X,
 } from "lucide-react";
 import { ApplicationDetail } from "@/components/application-detail";
+
+function csvField(value: string) {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function applicationsToCsv(apps: Application[]) {
+  const header = [
+    "Title",
+    "Company",
+    "Stage",
+    "Location",
+    "Remote",
+    "Score",
+    "Applied Date",
+    "Last Activity",
+    "Source URL",
+  ];
+  const rows = apps.map((a) => {
+    const title = a.job?.title ?? a.inlineJobData?.title ?? "";
+    const company = a.job?.company ?? a.inlineJobData?.company ?? "";
+    const score = a.job?.evaluation?.overallScore;
+    return [
+      title,
+      company,
+      a.stage,
+      a.job?.location ?? "",
+      a.job?.remote ? "Yes" : "No",
+      score != null ? String(score) : "",
+      new Date(a.createdAt).toISOString().slice(0, 10),
+      new Date(a.lastActivityAt).toISOString().slice(0, 10),
+      a.job?.sourceUrl ?? "",
+    ].map(csvField);
+  });
+  return [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+}
+
+function downloadCsv(apps: Application[]) {
+  const blob = new Blob([applicationsToCsv(apps)], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pipeline-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const DEFAULT_STAGES = [
   { id: "Saved", label: "Saved", color: "bg-slate-500" },
@@ -99,12 +148,16 @@ function AppCard({
   onDelete,
   onSelect,
   onStageChange,
+  isChecked,
+  onToggleCheck,
 }: {
   app: Application;
   isDragging?: boolean;
   onDelete: (id: string) => void;
   onSelect?: (id: string) => void;
   onStageChange?: (id: string, stage: string) => void;
+  isChecked?: boolean;
+  onToggleCheck?: (id: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const title = app.job?.title ?? app.inlineJobData?.title ?? "Untitled Role";
@@ -116,14 +169,32 @@ function AppCard({
     <div
       onClick={() => onSelect?.(app.id)}
       className={cn(
-        "bg-muted border border-border rounded-lg p-3 select-none cursor-pointer hover:border-blue-500/40 transition-colors",
+        "bg-muted border rounded-lg p-3 select-none cursor-pointer hover:border-blue-500/40 transition-colors",
+        isChecked ? "border-blue-500/40 bg-blue-500/5" : "border-border",
         isDragging && "opacity-50"
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-white truncate">{title}</p>
-          <p className="text-xs text-muted-foreground truncate">{company}</p>
+        <div className="flex items-start gap-1.5 min-w-0">
+          {onToggleCheck && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCheck(app.id);
+              }}
+              className="mt-0.5 shrink-0 text-muted-foreground/50 hover:text-blue-400 transition-colors"
+            >
+              {isChecked ? (
+                <CheckSquare className="h-3.5 w-3.5 text-blue-400" />
+              ) : (
+                <Square className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white truncate">{title}</p>
+            <p className="text-xs text-muted-foreground truncate">{company}</p>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {isInactive && (
@@ -239,11 +310,15 @@ function SortableCard({
   onDelete,
   onSelect,
   onStageChange,
+  isChecked,
+  onToggleCheck,
 }: {
   app: Application;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   onStageChange: (id: string, stage: string) => void;
+  isChecked: boolean;
+  onToggleCheck: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: app.id,
@@ -271,6 +346,8 @@ function SortableCard({
           onDelete={onDelete}
           onSelect={onSelect}
           onStageChange={onStageChange}
+          isChecked={isChecked}
+          onToggleCheck={onToggleCheck}
         />
       </div>
     </div>
@@ -283,12 +360,16 @@ function KanbanColumn({
   onDelete,
   onSelect,
   onStageChange,
+  checkedIds,
+  onToggleCheck,
 }: {
   stage: (typeof DEFAULT_STAGES)[0];
   apps: Application[];
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   onStageChange: (id: string, stage: string) => void;
+  checkedIds: Set<string>;
+  onToggleCheck: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
@@ -321,6 +402,8 @@ function KanbanColumn({
               onDelete={onDelete}
               onSelect={onSelect}
               onStageChange={onStageChange}
+              isChecked={checkedIds.has(app.id)}
+              onToggleCheck={onToggleCheck}
             />
           ))}
         </SortableContext>
@@ -340,6 +423,7 @@ export default function PipelinePage() {
   const [activeApp, setActiveApp] = useState<Application | null>(null);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -383,10 +467,39 @@ export default function PipelinePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["applications"] }),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => fetch(`/api/applications/${id}`, { method: "DELETE" })));
+    },
+    onSuccess: () => {
+      if (selectedAppId && checkedIds.has(selectedAppId)) setSelectedAppId(null);
+      setCheckedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+    },
+  });
+
   const apps = data?.applications ?? [];
 
   function getAppsForStage(stageId: string) {
     return apps.filter((a) => a.stage === stageId);
+  }
+
+  function toggleCheck(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setCheckedIds((prev) =>
+      prev.size === apps.length ? new Set() : new Set(apps.map((a) => a.id))
+    );
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -450,6 +563,17 @@ export default function PipelinePage() {
                 )}
               </button>
             )}
+            {apps.length > 0 && (
+              <button
+                onClick={() =>
+                  downloadCsv(checkedIds.size > 0 ? apps.filter((a) => checkedIds.has(a.id)) : apps)
+                }
+                className="flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+              </button>
+            )}
             <a
               href="/discover"
               className="flex items-center gap-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
@@ -460,6 +584,41 @@ export default function PipelinePage() {
           </div>
         </div>
 
+        {/* Bulk action bar */}
+        {apps.length > 0 && (
+          <div className="px-6 py-2 border-b border-border shrink-0 flex items-center justify-between">
+            <button
+              onClick={toggleAll}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {checkedIds.size === apps.length && apps.length > 0 ? (
+                <CheckSquare className="h-4 w-4 text-blue-400" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )}
+              {checkedIds.size === 0 ? "Select all" : `${checkedIds.size} selected`}
+            </button>
+            {checkedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => bulkDeleteMutation.mutate(Array.from(checkedIds))}
+                  disabled={bulkDeleteMutation.isPending}
+                  className="flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {bulkDeleteMutation.isPending ? "Deleting…" : `Delete ${checkedIds.size}`}
+                </button>
+                <button
+                  onClick={() => setCheckedIds(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Inactive apps (Ghosted / Withdrawn / Archived) */}
         {showInactive && inactiveApps.length > 0 && (
           <div className="px-6 py-4 border-b border-border shrink-0 bg-card/30">
@@ -469,8 +628,12 @@ export default function PipelinePage() {
                   <AppCard
                     app={app}
                     onDelete={(id) => deleteMutation.mutate(id)}
-                    onSelect={(id) => setSelectedAppId((prev) => (prev === id ? null : id))}
+                    onSelect={(id) =>
+                      checkedIds.size === 0 && setSelectedAppId((prev) => (prev === id ? null : id))
+                    }
                     onStageChange={(id, stage) => stageMutation.mutate({ id, stage })}
+                    isChecked={checkedIds.has(app.id)}
+                    onToggleCheck={toggleCheck}
                   />
                 </div>
               ))}
@@ -499,8 +662,12 @@ export default function PipelinePage() {
                   stage={stage}
                   apps={getAppsForStage(stage.id)}
                   onDelete={(id) => deleteMutation.mutate(id)}
-                  onSelect={(id) => setSelectedAppId((prev) => (prev === id ? null : id))}
+                  onSelect={(id) =>
+                    checkedIds.size === 0 && setSelectedAppId((prev) => (prev === id ? null : id))
+                  }
                   onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
+                  checkedIds={checkedIds}
+                  onToggleCheck={toggleCheck}
                 />
               ))}
             </div>
