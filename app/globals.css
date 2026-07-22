@@ -133,4 +133,26 @@
   .job-description-prose a:hover {
     color: hsl(217 91% 70%);
   }
+
+  /* Tiptap rich-text notes editor */
+  .prose-notes p {
+    margin-bottom: 0.5em;
+  }
+  .prose-notes p:last-child {
+    margin-bottom: 0;
+  }
+  .prose-notes ul,
+  .prose-notes ol {
+    margin: 0.4em 0 0.6em 1.2em;
+    list-style: disc;
+  }
+  .prose-notes ol {
+    list-style: decimal;
+  }
+  .prose-notes li {
+    margin-bottom: 0.25em;
+  }
+  .prose-notes strong {
+    font-weight: 600;
+  }
 }

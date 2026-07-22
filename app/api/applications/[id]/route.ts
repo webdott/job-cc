@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { sanitizeJobDescription } from "@/lib/sanitize";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const { userId: clerkId } = await auth();
@@ -54,7 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data: {
       ...(body.stage !== undefined && { stage: body.stage }),
-      ...(body.notes !== undefined && { notes: body.notes }),
+      ...(body.notes !== undefined && { notes: sanitizeJobDescription(body.notes) }),
       ...(body.followUpAt !== undefined && {
         followUpAt: body.followUpAt ? new Date(body.followUpAt) : null,
       }),

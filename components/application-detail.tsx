@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -21,6 +22,15 @@ import {
   AlertTriangle,
   Download,
 } from "lucide-react";
+const RichTextEditor = dynamic(
+  () => import("@/components/rich-text-editor").then((m) => m.RichTextEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[124px] bg-muted border border-border rounded-xl animate-pulse" />
+    ),
+  }
+);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -714,12 +724,10 @@ function OverviewTab({
           <p className="text-xs font-medium text-muted-foreground">Notes</p>
           {noteSaving && <span className="text-[10px] text-muted-foreground/60">Saving…</span>}
         </div>
-        <textarea
-          value={notes}
-          onChange={(e) => handleNotesChange(e.target.value)}
+        <RichTextEditor
+          content={notes}
+          onChange={handleNotesChange}
           placeholder="Add notes about this application…"
-          rows={4}
-          className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder-muted-foreground/40 resize-none focus:outline-none focus:border-blue-500 transition-colors"
         />
       </div>
 
