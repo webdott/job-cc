@@ -2,16 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { scoreJob } from "@/lib/job-scorer";
 import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
-import webpush from "web-push";
+import { notifyUser } from "@/lib/notifications";
 import type { ParsedResume } from "@/lib/resume-parser";
-
-// ── web-push setup ────────────────────────────────────────────────────────────
-
-webpush.setVapidDetails(
-  `mailto:${process.env.VAPID_CONTACT_EMAIL ?? "admin@example.com"}`,
-  process.env.VAPID_PUBLIC_KEY ?? "",
-  process.env.VAPID_PRIVATE_KEY ?? ""
-);
 
 // ── Job fetch helpers (mirrors /api/jobs/discover) ───────────────────────────
 
@@ -209,29 +201,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (newJobs.length === 0 || user.pushSubscriptions.length === 0) continue;
+    if (newJobs.length === 0) continue;
 
     const body = bestJob
       ? `${newJobs.length} new job match${newJobs.length !== 1 ? "es" : ""} — best: ${bestJob.title} at ${bestJob.company} (${Math.round(bestJob.score)}%)`
       : `${newJobs.length} new job match${newJobs.length !== 1 ? "es" : ""} found for you`;
 
-    for (const sub of user.pushSubscriptions) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify({
-            title: "Job Command Center",
-            body,
-            icon: "/icons/icon-192.png",
-            url: "/discover",
-          })
-        );
-        totalNotificationsSent++;
-      } catch {
-        // Subscription may be expired — remove it
-        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-      }
-    }
+    const { pushed } = await notifyUser({
+      userId: user.id,
+      type: "job_match",
+      title: "Job Command Center",
+      body,
+      url: "/discover",
+      preferences: user.preferences,
+      subscriptions: user.pushSubscriptions,
+    });
+    totalNotificationsSent += pushed;
   }
 
   return NextResponse.json({

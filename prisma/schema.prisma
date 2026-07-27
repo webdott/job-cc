@@ -33,6 +33,7 @@ model User {
   evaluations      JobEvaluation[]
   interviewStories InterviewStory[]
   pushSubscriptions PushSubscription[]
+  notifications    Notification[]
 }
 
 model Resume {
@@ -166,4 +167,18 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  url       String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
 }

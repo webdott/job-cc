@@ -36,6 +36,20 @@ interface Preferences {
   workType: WorkType[];
 }
 
+interface NotificationPrefs {
+  jobMatches: boolean;
+  followUpReminders: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+}
+
+const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  jobMatches: true,
+  followUpReminders: true,
+  quietHoursStart: "",
+  quietHoursEnd: "",
+};
+
 interface ParsedExperience {
   title: string;
   company: string;
@@ -101,6 +115,8 @@ export default function ProfilePage() {
   const [editSkills, setEditSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  const [notifPrefsSaved, setNotifPrefsSaved] = useState(false);
 
   const { data: resumesData, isLoading: resumesLoading } = useQuery<ResumesResponse>({
     queryKey: ["resumes"],
@@ -115,7 +131,9 @@ export default function ProfilePage() {
       try {
         const res = await fetch("/api/user/preferences");
         if (res.ok) {
-          const data = (await res.json()) as { preferences?: Partial<Preferences> };
+          const data = (await res.json()) as {
+            preferences?: Partial<Preferences> & { notifications?: Partial<NotificationPrefs> };
+          };
           if (data.preferences) {
             setPrefs({
               targetRoles: data.preferences.targetRoles ?? [],
@@ -123,6 +141,12 @@ export default function ProfilePage() {
               salaryMin: data.preferences.salaryMin ?? "",
               salaryMax: data.preferences.salaryMax ?? "",
               workType: data.preferences.workType ?? [],
+            });
+            setNotifPrefs({
+              jobMatches: data.preferences.notifications?.jobMatches ?? true,
+              followUpReminders: data.preferences.notifications?.followUpReminders ?? true,
+              quietHoursStart: data.preferences.notifications?.quietHoursStart ?? "",
+              quietHoursEnd: data.preferences.notifications?.quietHoursEnd ?? "",
             });
           }
         }
@@ -144,6 +168,27 @@ export default function ProfilePage() {
     onSuccess: () => {
       setPrefsSaved(true);
       setTimeout(() => setPrefsSaved(false), 2000);
+    },
+  });
+
+  const notifPrefsMutation = useMutation({
+    mutationFn: async (p: NotificationPrefs) => {
+      await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notifications: {
+            jobMatches: p.jobMatches,
+            followUpReminders: p.followUpReminders,
+            quietHoursStart: p.quietHoursStart || null,
+            quietHoursEnd: p.quietHoursEnd || null,
+          },
+        }),
+      });
+    },
+    onSuccess: () => {
+      setNotifPrefsSaved(true);
+      setTimeout(() => setNotifPrefsSaved(false), 2000);
     },
   });
 
@@ -631,7 +676,7 @@ export default function ProfilePage() {
 
       {/* Notifications */}
       <Section title="Notifications">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <Bell className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-foreground/80">Push notifications</span>
@@ -655,6 +700,84 @@ export default function ProfilePage() {
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
             Enable
+          </button>
+        </div>
+
+        <div className="space-y-3 pt-3 border-t border-border">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-foreground/80">Job match alerts</span>
+            <button
+              onClick={() => setNotifPrefs((p) => ({ ...p, jobMatches: !p.jobMatches }))}
+              className={cn(
+                "w-9 h-5 rounded-full relative transition-colors shrink-0",
+                notifPrefs.jobMatches ? "bg-blue-500" : "bg-muted border border-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform",
+                  notifPrefs.jobMatches && "translate-x-4"
+                )}
+              />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-foreground/80">Follow-up reminders</span>
+            <button
+              onClick={() =>
+                setNotifPrefs((p) => ({ ...p, followUpReminders: !p.followUpReminders }))
+              }
+              className={cn(
+                "w-9 h-5 rounded-full relative transition-colors shrink-0",
+                notifPrefs.followUpReminders ? "bg-blue-500" : "bg-muted border border-border"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform",
+                  notifPrefs.followUpReminders && "translate-x-4"
+                )}
+              />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              Quiet hours (no push during this window)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="time"
+                value={notifPrefs.quietHoursStart}
+                onChange={(e) => setNotifPrefs((p) => ({ ...p, quietHoursStart: e.target.value }))}
+                className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-xs text-muted-foreground/70">to</span>
+              <input
+                type="time"
+                value={notifPrefs.quietHoursEnd}
+                onChange={(e) => setNotifPrefs((p) => ({ ...p, quietHoursEnd: e.target.value }))}
+                className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={() => notifPrefsMutation.mutate(notifPrefs)}
+            disabled={notifPrefsMutation.isPending}
+            className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
+          >
+            {notifPrefsMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : notifPrefsSaved ? (
+              <CheckCircle className="h-4 w-4 text-green-300" />
+            ) : null}
+            {notifPrefsSaved
+              ? "Saved!"
+              : notifPrefsMutation.isPending
+                ? "Saving…"
+                : "Save notification settings"}
           </button>
         </div>
       </Section>
