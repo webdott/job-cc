@@ -5,6 +5,7 @@ import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
 import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
 import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
+import { parseHNListing, HN_LOW_CONFIDENCE_NOTICE } from "@/lib/hn-job-parser";
 
 interface RemotiveJob {
   id: number;
@@ -38,7 +39,7 @@ interface HNItem {
 
 async function fetchRemotive() {
   try {
-    const res = await fetch("https://remotive.com/api/remote-jobs?limit=20", {
+    const res = await fetch("https://remotive.com/api/remote-jobs?limit=100", {
       next: { revalidate: 3600 },
     });
     const data = (await res.json()) as { jobs: RemotiveJob[] };
@@ -63,25 +64,40 @@ function validDate(raw: string | number | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Arbeitnow's API is genuinely paginated (`links.next` points at the next
+// page). Follow it instead of slicing a single page, capped so a scan
+// doesn't balloon into hundreds of jobs needing per-job AI scoring.
+const ARBEITNOW_CAP = 60;
+const ARBEITNOW_MAX_PAGES = 3;
+
 async function fetchArbeitnow() {
-  try {
-    const res = await fetch("https://www.arbeitnow.com/api/job-board-api", {
-      next: { revalidate: 3600 },
-    });
-    const data = (await res.json()) as { data: ArbeitnowJob[] };
-    return (data.data ?? []).slice(0, 20).map((j: ArbeitnowJob) => ({
-      sourceUrl: j.url,
-      sourceId: `arbeitnow-${j.slug}`,
-      title: j.title,
-      company: j.company_name,
-      location: j.location,
-      description: stripToPlainText(j.description),
-      remote: j.remote ?? false,
-      postedAt: validDate(String(j.published_at)),
-    }));
-  } catch {
-    return [];
+  const jobs: ArbeitnowJob[] = [];
+  let url: string | null = "https://www.arbeitnow.com/api/job-board-api";
+
+  for (let page = 0; url && page < ARBEITNOW_MAX_PAGES && jobs.length < ARBEITNOW_CAP; page++) {
+    try {
+      const res = await fetch(url, { next: { revalidate: 3600 } });
+      const data = (await res.json()) as {
+        data: ArbeitnowJob[];
+        links?: { next?: string | null };
+      };
+      jobs.push(...(data.data ?? []));
+      url = data.links?.next ?? null;
+    } catch {
+      break; // keep whatever pages were already fetched
+    }
   }
+
+  return jobs.slice(0, ARBEITNOW_CAP).map((j: ArbeitnowJob) => ({
+    sourceUrl: j.url,
+    sourceId: `arbeitnow-${j.slug}`,
+    title: j.title,
+    company: j.company_name,
+    location: j.location,
+    description: stripToPlainText(j.description),
+    remote: j.remote ?? false,
+    postedAt: validDate(String(j.published_at)),
+  }));
 }
 
 async function fetchHNHiring() {
@@ -101,22 +117,18 @@ async function fetchHNHiring() {
       .slice(0, 20)
       .map((comment: { text: string; objectID: string }) => {
         const text = stripToPlainText(comment.text ?? "");
-        const lines = text.split("\n").filter(Boolean);
-        const firstLine = lines[0] ?? "";
-
-        // Best-effort parse: "Company | Role | Location"
-        const parts = firstLine.split("|").map((s) => s.trim());
-        const company = parts[0] || "Unknown Company";
-        const title = parts[1] || "Software Engineer";
-        const location = parts[2] || "Remote";
+        const parsed = parseHNListing(text);
+        const description = parsed.lowConfidence
+          ? `${HN_LOW_CONFIDENCE_NOTICE}\n\n${text}`.slice(0, 2000)
+          : text.slice(0, 2000);
 
         return {
           sourceUrl: `https://news.ycombinator.com/item?id=${comment.objectID}`,
           sourceId: `hn-${comment.objectID}`,
-          title,
-          company,
-          location,
-          description: text.slice(0, 2000),
+          title: parsed.title,
+          company: parsed.company,
+          location: parsed.location,
+          description,
           remote: text.toLowerCase().includes("remote"),
           postedAt: new Date(),
         };
