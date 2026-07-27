@@ -3,7 +3,8 @@ import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { sanitizeJobDescription } from "@/lib/sanitize";
-import { parseBody, ApplicationStageSchema, dateStringSchema } from "@/lib/validation";
+import { parseBody, dateStringSchema } from "@/lib/validation";
+import { isValidStageKey } from "@/lib/stages";
 
 // Contact fields autosave on blur as the user tabs through an in-progress row,
 // so blank strings are valid (not-yet-filled) — only reject malformed non-empty values.
@@ -15,7 +16,7 @@ const ContactSchema = z.object({
 });
 
 const UpdateApplicationSchema = z.object({
-  stage: ApplicationStageSchema.optional(),
+  stage: z.string().min(1).max(50).optional(),
   notes: z.string().optional(),
   followUpAt: dateStringSchema.nullable().optional(),
   contacts: z.array(ContactSchema).optional(),
@@ -54,6 +55,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { data: body, error } = await parseBody(req, UpdateApplicationSchema);
   if (error) return error;
+
+  if (body.stage !== undefined && !(await isValidStageKey(user.id, body.stage))) {
+    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
 
   // For timeline, we need to read first then append
   const existing = await prisma.application.findFirst({

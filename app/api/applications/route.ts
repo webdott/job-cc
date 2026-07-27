@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { parseBody, ApplicationStageSchema } from "@/lib/validation";
+import { parseBody } from "@/lib/validation";
+import { getOrSeedStages, isValidStageKey } from "@/lib/stages";
 
 const CreateApplicationSchema = z
   .object({
     jobId: z.string().min(1).optional(),
-    stage: ApplicationStageSchema.optional().default("Saved"),
+    stage: z.string().min(1).max(50).optional(),
     inlineJobData: z.record(z.string(), z.unknown()).optional(),
   })
   .refine((body) => body.jobId ?? body.inlineJobData, {
@@ -39,7 +40,15 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await parseBody(req, CreateApplicationSchema);
   if (error) return error;
-  const { jobId, stage, inlineJobData } = data;
+  const { jobId, inlineJobData } = data;
+
+  let stage = data.stage;
+  if (stage === undefined) {
+    const stages = await getOrSeedStages(user.id);
+    stage = stages[0]?.key ?? "Saved";
+  } else if (!(await isValidStageKey(user.id, stage))) {
+    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
 
   // Prevent duplicate applications for the same job
   if (jobId) {

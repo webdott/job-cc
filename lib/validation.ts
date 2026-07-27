@@ -1,18 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z, type ZodSchema } from "zod";
 
-export const ApplicationStageSchema = z.enum([
-  "Saved",
-  "Applied",
-  "Screening",
-  "Interview",
-  "Offer",
-  "Rejected",
-  "Ghosted",
-  "Withdrawn",
-  "Archived",
-]);
-
 /** ISO-ish date string that must parse to a valid Date. */
 export const dateStringSchema = z.string().refine((s) => !isNaN(new Date(s).getTime()), {
   message: "Invalid date",

@@ -31,8 +31,11 @@ import {
   CheckSquare,
   Download,
   X,
+  Settings2,
 } from "lucide-react";
 import { ApplicationDetail } from "@/components/application-detail";
+import { StageManager } from "@/components/stage-manager";
+import { INACTIVE_STAGES, INACTIVE_STAGE_KEYS } from "@/lib/stage-constants";
 
 function csvField(value: string) {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -79,22 +82,19 @@ function downloadCsv(apps: Application[]) {
   URL.revokeObjectURL(url);
 }
 
-const DEFAULT_STAGES = [
-  { id: "Saved", label: "Saved", color: "bg-slate-500" },
-  { id: "Applied", label: "Applied", color: "bg-blue-500" },
-  { id: "Screening", label: "Screening", color: "bg-yellow-500" },
-  { id: "Interview", label: "Interview", color: "bg-purple-500" },
-  { id: "Offer", label: "Offer", color: "bg-green-500" },
-  { id: "Rejected", label: "Rejected", color: "bg-red-500" },
-];
+interface Stage {
+  id: string;
+  key: string;
+  label: string;
+  color: string;
+  position: number;
+}
 
-const INACTIVE_STAGES = [
-  { id: "Ghosted", label: "Ghosted", color: "bg-zinc-500" },
-  { id: "Withdrawn", label: "Withdrawn", color: "bg-orange-500" },
-  { id: "Archived", label: "Archived", color: "bg-neutral-500" },
-];
+interface StagesResponse {
+  stages: Stage[];
+}
 
-const INACTIVE_STAGE_IDS = INACTIVE_STAGES.map((s) => s.id);
+const INACTIVE_STAGE_IDS: readonly string[] = INACTIVE_STAGE_KEYS;
 
 interface Evaluation {
   overallScore: number | null;
@@ -150,6 +150,7 @@ function AppCard({
   onStageChange,
   isChecked,
   onToggleCheck,
+  restoreStageKey = "Applied",
 }: {
   app: Application;
   isDragging?: boolean;
@@ -158,6 +159,7 @@ function AppCard({
   onStageChange?: (id: string, stage: string) => void;
   isChecked?: boolean;
   onToggleCheck?: (id: string) => void;
+  restoreStageKey?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const title = app.job?.title ?? app.inlineJobData?.title ?? "Untitled Role";
@@ -201,7 +203,7 @@ function AppCard({
             <span
               className={cn(
                 "text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white",
-                INACTIVE_STAGES.find((s) => s.id === app.stage)?.color
+                INACTIVE_STAGES.find((s) => s.key === app.stage)?.color
               )}
             >
               {app.stage}
@@ -262,7 +264,7 @@ function AppCard({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onStageChange(app.id, "Applied");
+                          onStageChange(app.id, restoreStageKey);
                           setMenuOpen(false);
                         }}
                         className="flex items-center gap-1.5 w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
@@ -273,10 +275,10 @@ function AppCard({
                     ) : (
                       INACTIVE_STAGES.map((s) => (
                         <button
-                          key={s.id}
+                          key={s.key}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onStageChange(app.id, s.id);
+                            onStageChange(app.id, s.key);
                             setMenuOpen(false);
                           }}
                           className="block w-full text-left px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
@@ -312,6 +314,7 @@ function SortableCard({
   onStageChange,
   isChecked,
   onToggleCheck,
+  restoreStageKey,
 }: {
   app: Application;
   onDelete: (id: string) => void;
@@ -319,6 +322,7 @@ function SortableCard({
   onStageChange: (id: string, stage: string) => void;
   isChecked: boolean;
   onToggleCheck: (id: string) => void;
+  restoreStageKey: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: app.id,
@@ -348,6 +352,7 @@ function SortableCard({
           onStageChange={onStageChange}
           isChecked={isChecked}
           onToggleCheck={onToggleCheck}
+          restoreStageKey={restoreStageKey}
         />
       </div>
     </div>
@@ -362,16 +367,18 @@ function KanbanColumn({
   onStageChange,
   checkedIds,
   onToggleCheck,
+  restoreStageKey,
 }: {
-  stage: (typeof DEFAULT_STAGES)[0];
+  stage: Stage;
   apps: Application[];
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   onStageChange: (id: string, stage: string) => void;
   checkedIds: Set<string>;
   onToggleCheck: (id: string) => void;
+  restoreStageKey: string;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  const { setNodeRef, isOver } = useDroppable({ id: stage.key });
 
   return (
     <div className="flex flex-col min-w-[260px] max-w-[260px]">
@@ -404,6 +411,7 @@ function KanbanColumn({
               onStageChange={onStageChange}
               isChecked={checkedIds.has(app.id)}
               onToggleCheck={onToggleCheck}
+              restoreStageKey={restoreStageKey}
             />
           ))}
         </SortableContext>
@@ -424,6 +432,7 @@ export default function PipelinePage() {
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [managingStages, setManagingStages] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -432,6 +441,14 @@ export default function PipelinePage() {
     queryFn: async () => {
       const res = await fetch("/api/applications");
       return res.json() as Promise<ApplicationsResponse>;
+    },
+  });
+
+  const { data: stagesData, isLoading: stagesLoading } = useQuery<StagesResponse>({
+    queryKey: ["stages"],
+    queryFn: async () => {
+      const res = await fetch("/api/stages");
+      return res.json() as Promise<StagesResponse>;
     },
   });
 
@@ -479,6 +496,8 @@ export default function PipelinePage() {
   });
 
   const apps = data?.applications ?? [];
+  const stages = stagesData?.stages ?? [];
+  const restoreStageKey = stages[0]?.key ?? "Applied";
 
   function getAppsForStage(stageId: string) {
     return apps.filter((a) => a.stage === stageId);
@@ -512,15 +531,15 @@ export default function PipelinePage() {
     const { active, over } = event;
     if (!over) return;
 
-    const targetStage = DEFAULT_STAGES.find(
-      (s) => s.id === over.id || getAppsForStage(s.id).some((a) => a.id === over.id)
+    const targetStage = stages.find(
+      (s) => s.key === over.id || getAppsForStage(s.key).some((a) => a.id === over.id)
     );
     if (!targetStage) return;
 
     const draggedApp = apps.find((a) => a.id === active.id);
-    if (!draggedApp || draggedApp.stage === targetStage.id) return;
+    if (!draggedApp || draggedApp.stage === targetStage.key) return;
 
-    stageMutation.mutate({ id: draggedApp.id, stage: targetStage.id });
+    stageMutation.mutate({ id: draggedApp.id, stage: targetStage.key });
   }
 
   const totalActive = apps.filter(
@@ -574,6 +593,13 @@ export default function PipelinePage() {
                 Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
               </button>
             )}
+            <button
+              onClick={() => setManagingStages(true)}
+              className="flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Settings2 className="h-4 w-4" />
+              Manage stages
+            </button>
             <a
               href="/discover"
               className="flex items-center gap-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
@@ -634,6 +660,7 @@ export default function PipelinePage() {
                     onStageChange={(id, stage) => stageMutation.mutate({ id, stage })}
                     isChecked={checkedIds.has(app.id)}
                     onToggleCheck={toggleCheck}
+                    restoreStageKey={restoreStageKey}
                   />
                 </div>
               ))}
@@ -642,13 +669,13 @@ export default function PipelinePage() {
         )}
 
         {/* Kanban board */}
-        {isLoading ? (
+        {isLoading || stagesLoading ? (
           <div className="flex gap-4 p-6 overflow-x-auto">
-            {DEFAULT_STAGES.map((s) => (
-              <div key={s.id} className="min-w-[260px] space-y-2">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="min-w-[260px] space-y-2">
                 <div className="h-5 bg-muted rounded w-20 mb-3 animate-pulse" />
-                {[1, 2].map((i) => (
-                  <div key={i} className="h-20 bg-muted rounded-lg animate-pulse" />
+                {[1, 2].map((j) => (
+                  <div key={j} className="h-20 bg-muted rounded-lg animate-pulse" />
                 ))}
               </div>
             ))}
@@ -656,11 +683,11 @@ export default function PipelinePage() {
         ) : (
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex gap-4 p-6 overflow-x-auto flex-1">
-              {DEFAULT_STAGES.map((stage) => (
+              {stages.map((stage) => (
                 <KanbanColumn
                   key={stage.id}
                   stage={stage}
-                  apps={getAppsForStage(stage.id)}
+                  apps={getAppsForStage(stage.key)}
                   onDelete={(id) => deleteMutation.mutate(id)}
                   onSelect={(id) =>
                     checkedIds.size === 0 && setSelectedAppId((prev) => (prev === id ? null : id))
@@ -668,6 +695,7 @@ export default function PipelinePage() {
                   onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
                   checkedIds={checkedIds}
                   onToggleCheck={toggleCheck}
+                  restoreStageKey={restoreStageKey}
                 />
               ))}
             </div>
@@ -699,6 +727,8 @@ export default function PipelinePage() {
       {selectedAppId && (
         <ApplicationDetail applicationId={selectedAppId} onClose={() => setSelectedAppId(null)} />
       )}
+
+      {managingStages && <StageManager onClose={() => setManagingStages(false)} />}
     </div>
   );
 }

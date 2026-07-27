@@ -34,6 +34,7 @@ model User {
   interviewStories InterviewStory[]
   pushSubscriptions PushSubscription[]
   notifications    Notification[]
+  stages           Stage[]
 }
 
 model Resume {
@@ -181,4 +182,21 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+}
+
+// Active/orderable Kanban columns a user can customize. Ghosted/Withdrawn/
+// Archived are a separate, fixed set of terminal statuses (see lib/stage-constants.ts)
+// and are intentionally not part of this table.
+model Stage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  color     String   @default("bg-slate-500")
+  position  Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([userId, position])
 }
