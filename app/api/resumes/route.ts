@@ -85,8 +85,14 @@ export async function POST(req: NextRequest) {
       update: {},
     });
 
-    // Check if this is the first resume
+    // Check if this is the first resume, and enforce the 3-resume cap
     const existingCount = await prisma.resume.count({ where: { userId: user.id } });
+    if (existingCount >= 3) {
+      return NextResponse.json(
+        { error: "You can have at most 3 resumes. Delete one before uploading another." },
+        { status: 400 }
+      );
+    }
 
     // Upload to R2
     const key = `resumes/${user.id}/${Date.now()}-${label.replace(/\s+/g, "-")}.${file.type === "application/pdf" ? "pdf" : "docx"}`;
