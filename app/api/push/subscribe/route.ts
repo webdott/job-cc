@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { parseBody } from "@/lib/validation";
+
+const SubscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+});
 
 export async function POST(req: NextRequest) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const clerkUser = await currentUser();
-  const { endpoint, keys } = (await req.json()) as {
-    endpoint: string;
-    keys: { p256dh: string; auth: string };
-  };
-
-  if (!endpoint || !keys?.p256dh || !keys?.auth) {
-    return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
-  }
+  const { data, error } = await parseBody(req, SubscribeSchema);
+  if (error) return error;
+  const { endpoint, keys } = data;
 
   const user = await prisma.user.upsert({
     where: { clerkId },

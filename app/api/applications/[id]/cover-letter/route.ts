@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { streamText } from "ai";
 import { proModel } from "@/lib/ai";
+import { sanitizeJobDescription } from "@/lib/sanitize";
+import { parseBody } from "@/lib/validation";
+
+const GenerateCoverLetterSchema = z.object({
+  tone: z.enum(["Professional", "Enthusiastic", "Concise"]).optional().default("Professional"),
+});
+
+const UpdateCoverLetterSchema = z.object({
+  content: z.string().min(1).max(20_000),
+});
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { userId: clerkId } = await auth();
@@ -27,8 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   });
   if (!resume) return NextResponse.json({ error: "No active resume" }, { status: 400 });
 
-  const body = (await req.json()) as { tone?: string };
-  const tone = body.tone ?? "Professional";
+  const { data: body, error } = await parseBody(req, GenerateCoverLetterSchema);
+  if (error) return error;
+  const { tone } = body;
 
   const jobTitle =
     application.job?.title ??
@@ -149,7 +161,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const body = (await req.json()) as { content: string };
+  const { data: body, error } = await parseBody(req, UpdateCoverLetterSchema);
+  if (error) return error;
 
   const coverLetter = await prisma.coverLetter.findFirst({
     where: { application: { id: params.id, userId: user.id } },
@@ -158,7 +171,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const updated = await prisma.coverLetter.update({
     where: { id: coverLetter.id },
-    data: { content: body.content, updatedAt: new Date() },
+    data: { content: sanitizeJobDescription(body.content), updatedAt: new Date() },
   });
 
   return NextResponse.json({ coverLetter: updated });
