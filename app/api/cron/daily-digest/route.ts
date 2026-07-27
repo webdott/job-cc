@@ -37,6 +37,14 @@ interface ArbeitnowJob {
   published_at: string;
 }
 
+interface HNStory {
+  hits: Array<{ objectID: string }>;
+}
+
+interface HNItem {
+  children: Array<{ text: string; objectID: string }>;
+}
+
 function validDate(raw: string | number | undefined): Date | null {
   if (!raw) return null;
   const d = new Date(raw);
@@ -81,6 +89,46 @@ async function fetchArbeitnow() {
   }
 }
 
+async function fetchHNHiring() {
+  try {
+    // Find latest "Ask HN: Who's Hiring" thread
+    const searchRes = await fetch(
+      "https://hn.algolia.com/api/v1/search?query=Ask+HN+Who+is+hiring&tags=story,ask_hn&hitsPerPage=1"
+    );
+    const searchData = (await searchRes.json()) as HNStory;
+    const storyId = searchData.hits?.[0]?.objectID;
+    if (!storyId) return [];
+
+    const storyRes = await fetch(`https://hn.algolia.com/api/v1/items/${storyId}`);
+    const story = (await storyRes.json()) as HNItem;
+
+    return (story.children ?? []).slice(0, 20).map((comment) => {
+      const text = stripToPlainText(comment.text ?? "");
+      const lines = text.split("\n").filter(Boolean);
+      const firstLine = lines[0] ?? "";
+
+      // Best-effort parse: "Company | Role | Location"
+      const parts = firstLine.split("|").map((s) => s.trim());
+      const company = parts[0] || "Unknown Company";
+      const title = parts[1] || "Software Engineer";
+      const location = parts[2] || "Remote";
+
+      return {
+        sourceUrl: `https://news.ycombinator.com/item?id=${comment.objectID}`,
+        sourceId: `hn-${comment.objectID}`,
+        title,
+        company,
+        location,
+        description: text.slice(0, 2000),
+        remote: text.toLowerCase().includes("remote"),
+        postedAt: new Date(),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -91,25 +139,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch jobs from external sources once (shared across all users)
-  const [remotive, arbeitnow] = await Promise.all([fetchRemotive(), fetchArbeitnow()]);
-  const allJobData = [...remotive, ...arbeitnow];
+  const runStartedAt = new Date();
 
-  // Get all users who have at least one push subscription
-  const subscriptions = await prisma.pushSubscription.findMany({
+  // Fetch jobs from external sources once (shared across all users)
+  const [remotive, arbeitnow, hn] = await Promise.all([
+    fetchRemotive(),
+    fetchArbeitnow(),
+    fetchHNHiring(),
+  ]);
+  const allJobData = [...remotive, ...arbeitnow, ...hn];
+
+  // Run discovery for every user with an active resume — not just those with
+  // a push subscription, so users who never enabled notifications still get
+  // automatic re-discovery. Notifications are sent afterward, only to users
+  // who have at least one PushSubscription.
+  const users = await prisma.user.findMany({
+    where: { resumes: { some: { isActive: true } } },
     include: {
-      user: {
-        include: {
-          resumes: { where: { isActive: true }, take: 1 },
-        },
-      },
+      resumes: { where: { isActive: true }, take: 1 },
+      pushSubscriptions: true,
     },
   });
 
   let totalNotificationsSent = 0;
 
-  for (const sub of subscriptions) {
-    const user = sub.user;
+  for (const user of users) {
     const activeResume = user.resumes[0] ?? null;
     if (!activeResume) continue;
 
@@ -126,7 +180,7 @@ export async function GET(req: NextRequest) {
           update: {},
         });
 
-        const isNew = job.fetchedAt > new Date(Date.now() - 10_000);
+        const isNew = job.fetchedAt >= runStartedAt;
         if (!isNew) continue;
 
         // Score the new job
@@ -155,32 +209,34 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (newJobs.length === 0) continue;
+    if (newJobs.length === 0 || user.pushSubscriptions.length === 0) continue;
 
     const body = bestJob
       ? `${newJobs.length} new job match${newJobs.length !== 1 ? "es" : ""} — best: ${bestJob.title} at ${bestJob.company} (${Math.round(bestJob.score)}%)`
       : `${newJobs.length} new job match${newJobs.length !== 1 ? "es" : ""} found for you`;
 
-    try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify({
-          title: "Job Command Center",
-          body,
-          icon: "/icons/icon-192.png",
-          url: "/discover",
-        })
-      );
-      totalNotificationsSent++;
-    } catch {
-      // Subscription may be expired — remove it
-      await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+    for (const sub of user.pushSubscriptions) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          JSON.stringify({
+            title: "Job Command Center",
+            body,
+            icon: "/icons/icon-192.png",
+            url: "/discover",
+          })
+        );
+        totalNotificationsSent++;
+      } catch {
+        // Subscription may be expired — remove it
+        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+      }
     }
   }
 
   return NextResponse.json({
     ok: true,
-    usersProcessed: subscriptions.length,
+    usersProcessed: users.length,
     notificationsSent: totalNotificationsSent,
   });
 }
