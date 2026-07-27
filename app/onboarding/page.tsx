@@ -147,8 +147,9 @@ export default function OnboardingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
       });
-    } catch {
+    } catch (error) {
       // Fail silently — notifications are optional
+      console.error("Failed to enable notifications", error);
     }
     router.push("/");
   }
