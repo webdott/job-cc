@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -14,7 +14,9 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { vibrate } from "@/lib/haptics";
 import {
   MapPin,
   Wifi,
@@ -35,7 +37,21 @@ import {
 } from "lucide-react";
 import { ApplicationDetail } from "@/components/application-detail";
 import { StageManager } from "@/components/stage-manager";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { INACTIVE_STAGES, INACTIVE_STAGE_KEYS } from "@/lib/stage-constants";
+
+// Coarse pointer (touch) detection — gates swipe-to-move so mouse users on
+// desktop keep the existing drag-handle-only interaction untouched.
+function useIsTouchDevice() {
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    setIsTouch(
+      typeof window !== "undefined" &&
+        (window.matchMedia?.("(pointer: coarse)").matches || navigator.maxTouchPoints > 0)
+    );
+  }, []);
+  return isTouch;
+}
 
 function csvField(value: string) {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -359,9 +375,81 @@ function SortableCard({
   );
 }
 
+// Swipe distance (px) needed to commit a stage move. Below this it springs
+// back to center — a deliberate flick, not an accidental brush.
+const SWIPE_THRESHOLD = 90;
+
+// Touch-only alternative to the desktop grip-handle drag: swipe a card left
+// or right to move it to the previous/next Kanban column. The grip handle
+// relies on `group-hover` to reveal itself, which touch input never
+// triggers, so without this, touch users have no way to change a card's
+// stage except the "..." menu (only offered for the inactive statuses).
+function SwipeableCard({
+  app,
+  prevStage,
+  nextStage,
+  onSwipe,
+  children,
+}: {
+  app: Application;
+  prevStage: Stage | null;
+  nextStage: Stage | null;
+  onSwipe: (id: string, stage: string) => void;
+  children: React.ReactNode;
+}) {
+  const x = useMotionValue(0);
+  const nextOpacity = useTransform(x, [20, SWIPE_THRESHOLD], [0, 1]);
+  const prevOpacity = useTransform(x, [-SWIPE_THRESHOLD, -20], [1, 0]);
+
+  if (!prevStage && !nextStage) return <>{children}</>;
+
+  function handleDragEnd(_event: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
+    if (info.offset.x >= SWIPE_THRESHOLD && nextStage) {
+      vibrate();
+      onSwipe(app.id, nextStage.key);
+    } else if (info.offset.x <= -SWIPE_THRESHOLD && prevStage) {
+      vibrate();
+      onSwipe(app.id, prevStage.key);
+    }
+  }
+
+  return (
+    <div className="relative">
+      {nextStage && (
+        <motion.div
+          style={{ opacity: nextOpacity }}
+          className="absolute inset-0 flex items-center justify-end pr-4 rounded-lg bg-blue-500/15 text-blue-400 text-xs font-medium"
+        >
+          {nextStage.label} →
+        </motion.div>
+      )}
+      {prevStage && (
+        <motion.div
+          style={{ opacity: prevOpacity }}
+          className="absolute inset-0 flex items-center justify-start pl-4 rounded-lg bg-muted text-muted-foreground text-xs font-medium"
+        >
+          ← {prevStage.label}
+        </motion.div>
+      )}
+      <motion.div
+        drag="x"
+        style={{ x, touchAction: "pan-y" }}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.6}
+        onDragEnd={handleDragEnd}
+        className="relative z-10"
+      >
+        {children}
+      </motion.div>
+    </div>
+  );
+}
+
 function KanbanColumn({
   stage,
   apps,
+  allStages,
+  isTouch,
   onDelete,
   onSelect,
   onStageChange,
@@ -371,6 +459,8 @@ function KanbanColumn({
 }: {
   stage: Stage;
   apps: Application[];
+  allStages: Stage[];
+  isTouch: boolean;
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   onStageChange: (id: string, stage: string) => void;
@@ -379,6 +469,11 @@ function KanbanColumn({
   restoreStageKey: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.key });
+
+  const stageIndex = allStages.findIndex((s) => s.key === stage.key);
+  const prevStage = stageIndex > 0 ? allStages[stageIndex - 1] : null;
+  const nextStage =
+    stageIndex >= 0 && stageIndex < allStages.length - 1 ? allStages[stageIndex + 1] : null;
 
   return (
     <div className="flex flex-col min-w-[260px] max-w-[260px]">
@@ -402,18 +497,32 @@ function KanbanColumn({
         )}
       >
         <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-          {apps.map((app) => (
-            <SortableCard
-              key={app.id}
-              app={app}
-              onDelete={onDelete}
-              onSelect={onSelect}
-              onStageChange={onStageChange}
-              isChecked={checkedIds.has(app.id)}
-              onToggleCheck={onToggleCheck}
-              restoreStageKey={restoreStageKey}
-            />
-          ))}
+          {apps.map((app) => {
+            const card = (
+              <SortableCard
+                key={app.id}
+                app={app}
+                onDelete={onDelete}
+                onSelect={onSelect}
+                onStageChange={onStageChange}
+                isChecked={checkedIds.has(app.id)}
+                onToggleCheck={onToggleCheck}
+                restoreStageKey={restoreStageKey}
+              />
+            );
+            if (!isTouch) return card;
+            return (
+              <SwipeableCard
+                key={app.id}
+                app={app}
+                prevStage={prevStage}
+                nextStage={nextStage}
+                onSwipe={onStageChange}
+              >
+                {card}
+              </SwipeableCard>
+            );
+          })}
         </SortableContext>
 
         {apps.length === 0 && (
@@ -433,6 +542,7 @@ export default function PipelinePage() {
   const [showInactive, setShowInactive] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [managingStages, setManagingStages] = useState(false);
+  const isTouch = useIsTouchDevice();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -443,6 +553,13 @@ export default function PipelinePage() {
       return res.json() as Promise<ApplicationsResponse>;
     },
   });
+
+  async function handlePullRefresh() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["applications"] }),
+      queryClient.invalidateQueries({ queryKey: ["stages"] }),
+    ]);
+  }
 
   const { data: stagesData, isLoading: stagesLoading } = useQuery<StagesResponse>({
     queryKey: ["stages"],
@@ -682,23 +799,27 @@ export default function PipelinePage() {
           </div>
         ) : (
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex gap-4 p-6 overflow-x-auto flex-1">
-              {stages.map((stage) => (
-                <KanbanColumn
-                  key={stage.id}
-                  stage={stage}
-                  apps={getAppsForStage(stage.key)}
-                  onDelete={(id) => deleteMutation.mutate(id)}
-                  onSelect={(id) =>
-                    checkedIds.size === 0 && setSelectedAppId((prev) => (prev === id ? null : id))
-                  }
-                  onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
-                  checkedIds={checkedIds}
-                  onToggleCheck={toggleCheck}
-                  restoreStageKey={restoreStageKey}
-                />
-              ))}
-            </div>
+            <PullToRefresh className="flex-1" onRefresh={handlePullRefresh}>
+              <div className="flex gap-4 p-6 overflow-x-auto">
+                {stages.map((stage) => (
+                  <KanbanColumn
+                    key={stage.id}
+                    stage={stage}
+                    apps={getAppsForStage(stage.key)}
+                    allStages={stages}
+                    isTouch={isTouch}
+                    onDelete={(id) => deleteMutation.mutate(id)}
+                    onSelect={(id) =>
+                      checkedIds.size === 0 && setSelectedAppId((prev) => (prev === id ? null : id))
+                    }
+                    onStageChange={(id, s) => stageMutation.mutate({ id, stage: s })}
+                    checkedIds={checkedIds}
+                    onToggleCheck={toggleCheck}
+                    restoreStageKey={restoreStageKey}
+                  />
+                ))}
+              </div>
+            </PullToRefresh>
 
             <DragOverlay>
               {activeApp && (
