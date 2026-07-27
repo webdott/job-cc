@@ -6,6 +6,7 @@ import { streamText } from "ai";
 import { proModel } from "@/lib/ai";
 import { sanitizeJobDescription } from "@/lib/sanitize";
 import { parseBody } from "@/lib/validation";
+import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
 
 const GenerateCoverLetterSchema = z.object({
   tone: z.enum(["Professional", "Enthusiastic", "Concise"]).optional().default("Professional"),
@@ -18,6 +19,9 @@ const UpdateCoverLetterSchema = z.object({
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = await checkRateLimit(aiRatelimit, clerkId);
+  if (limited) return limited;
 
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });

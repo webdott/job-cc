@@ -9,6 +9,7 @@ import type { ParsedResume } from "@/lib/resume-parser";
 import * as cheerio from "cheerio";
 import { stripToPlainText } from "@/lib/sanitize";
 import { parseBody } from "@/lib/validation";
+import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
 
 const ManualJobInputSchema = z
   .object({
@@ -32,6 +33,9 @@ const JobFieldsSchema = z.object({
 export async function POST(req: NextRequest) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = await checkRateLimit(aiRatelimit, clerkId);
+  if (limited) return limited;
 
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });

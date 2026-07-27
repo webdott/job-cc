@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
 import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
+import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
 
 interface RemotiveJob {
   id: number;
@@ -128,6 +129,9 @@ async function fetchHNHiring() {
 export async function POST() {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = await checkRateLimit(aiRatelimit, clerkId);
+  if (limited) return limited;
 
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "Complete onboarding first" }, { status: 400 });
