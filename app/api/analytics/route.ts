@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import type { ParsedResume } from "@/lib/resume-parser";
+import { COMMON_SKILLS } from "@/lib/skills-taxonomy";
+
+const TOP_SKILLS_LIMIT = 10;
+
+function normalizeSkill(skill: string): string {
+  return skill.trim().toLowerCase();
+}
+
+/** Case-insensitive, word-boundary-aware match for a skill inside free text. */
+function buildSkillRegex(skill: string): RegExp {
+  const escaped = skill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const isWordChar = (c: string) => /[A-Za-z0-9]/.test(c);
+  const lead = isWordChar(skill[0]) ? "(?<![A-Za-z0-9])" : "";
+  const trail = isWordChar(skill[skill.length - 1]) ? "(?![A-Za-z0-9])" : "";
+  return new RegExp(`${lead}${escaped}${trail}`, "i");
+}
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -9,11 +26,14 @@ export async function GET() {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ stats: null });
 
-  const applications = await prisma.application.findMany({
-    where: { userId: user.id },
-    include: { job: { include: { evaluation: true } }, evaluation: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const [applications, activeResume] = await Promise.all([
+    prisma.application.findMany({
+      where: { userId: user.id },
+      include: { job: { include: { evaluation: true } }, evaluation: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.resume.findFirst({ where: { userId: user.id, isActive: true } }),
+  ]);
 
   type App = (typeof applications)[number];
 
@@ -91,6 +111,65 @@ export async function GET() {
   const avgScore =
     scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
 
+  // Skills gap — top skills demanded across the tracked pipeline vs. the
+  // active resume's skills. There's no structured "required skills" field on
+  // Job/JobEvaluation, so we mine Job.description text against a curated
+  // skill vocabulary (COMMON_SKILLS) merged with the resume's own skills.
+  let skillsGap: {
+    hasResume: boolean;
+    hasData: boolean;
+    resumeSkillCount: number;
+    topSkills: { skill: string; count: number; status: "have" | "gap" }[];
+  };
+
+  if (!activeResume) {
+    skillsGap = { hasResume: false, hasData: false, resumeSkillCount: 0, topSkills: [] };
+  } else {
+    const resumeSkills = (activeResume.parsedData as ParsedResume)?.skills ?? [];
+    const resumeSkillSet = new Set(resumeSkills.map(normalizeSkill));
+
+    // Vocabulary: canonical skills + any resume skill not already covered,
+    // keyed by normalized name so "have" skills never appear twice.
+    const vocab = new Map<string, string>();
+    for (const skill of COMMON_SKILLS) vocab.set(normalizeSkill(skill), skill);
+    for (const skill of resumeSkills) {
+      const key = normalizeSkill(skill);
+      if (!vocab.has(key)) vocab.set(key, skill);
+    }
+
+    // Dedupe job descriptions by job id so a skill counts once per job even
+    // if multiple applications somehow reference it.
+    const jobDescriptions = new Map<string, string>();
+    for (const a of applications) {
+      if (a.job?.id && a.job.description) jobDescriptions.set(a.job.id, a.job.description);
+    }
+
+    const counts = new Map<string, number>();
+    for (const description of Array.from(jobDescriptions.values())) {
+      for (const [key, label] of Array.from(vocab.entries())) {
+        if (buildSkillRegex(label).test(description)) {
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+      }
+    }
+
+    const topSkills = Array.from(counts.entries())
+      .map(([key, count]) => ({
+        skill: vocab.get(key) as string,
+        count,
+        status: (resumeSkillSet.has(key) ? "have" : "gap") as "have" | "gap",
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, TOP_SKILLS_LIMIT);
+
+    skillsGap = {
+      hasResume: true,
+      hasData: jobDescriptions.size > 0,
+      resumeSkillCount: resumeSkills.length,
+      topSkills,
+    };
+  }
+
   return NextResponse.json({
     stats: {
       total,
@@ -102,6 +181,7 @@ export async function GET() {
       responseRate,
       interviewRate,
       avgScore,
+      skillsGap,
       funnel,
       byDay,
       weeklyTrend,

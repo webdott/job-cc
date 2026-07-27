@@ -11,9 +11,17 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from "recharts";
 import { cn } from "@/lib/utils";
-import { TrendingUp, Send, MessageSquare, CalendarCheck, Trophy } from "lucide-react";
+import { TrendingUp, Send, MessageSquare, CalendarCheck, Trophy, Sparkles } from "lucide-react";
+
+interface SkillsGap {
+  hasResume: boolean;
+  hasData: boolean;
+  resumeSkillCount: number;
+  topSkills: { skill: string; count: number; status: "have" | "gap" }[];
+}
 
 interface AnalyticsStats {
   total: number;
@@ -25,6 +33,7 @@ interface AnalyticsStats {
   responseRate: number;
   interviewRate: number;
   avgScore: number | null;
+  skillsGap: SkillsGap;
   funnel: { stage: string; count: number }[];
   byDay: { day: string; count: number }[];
   weeklyTrend: { week: string; applied: number; responses: number }[];
@@ -78,6 +87,14 @@ const STAGE_COLORS: Record<string, string> = {
   Interview: "#a855f7",
   Offer: "#22c55e",
   Rejected: "#ef4444",
+};
+
+// Status color job (have vs. gap), not identity — reuses the app's existing
+// green ("Offer"/success) and amber ("Screening"/attention) tokens above so
+// the meaning stays consistent with the rest of the dashboard.
+const SKILL_STATUS_COLORS: Record<"have" | "gap", string> = {
+  have: "#22c55e",
+  gap: "#eab308",
 };
 
 export default function AnalyticsPage() {
@@ -281,6 +298,94 @@ export default function AnalyticsPage() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Skills gap */}
+      <div className="bg-card border border-border rounded-xl p-4 mt-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-medium text-foreground/80">Skills in Demand</h2>
+        </div>
+        {isLoading ? (
+          <div className="h-56 bg-muted rounded animate-pulse" />
+        ) : !stats?.skillsGap.hasResume ? (
+          <p className="text-muted-foreground/70 text-sm py-4">
+            Add an active resume in your profile to see how its skills stack up against the jobs
+            you&apos;re tracking.
+          </p>
+        ) : stats.skillsGap.topSkills.length === 0 ? (
+          <p className="text-muted-foreground/70 text-sm py-4">
+            Track a few jobs to see which skills show up most in their descriptions.
+          </p>
+        ) : (
+          <>
+            <ResponsiveContainer
+              width="100%"
+              height={Math.max(stats.skillsGap.topSkills.length * 32, 120)}
+            >
+              <BarChart
+                data={stats.skillsGap.topSkills}
+                layout="vertical"
+                margin={{ top: 4, right: 28, bottom: 4, left: 4 }}
+                barCategoryGap={6}
+              >
+                <XAxis type="number" hide allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="skill"
+                  tick={{ fontSize: 11, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={110}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: "#e2e8f0" }}
+                  cursor={{ fill: "rgba(255,255,255,0.03)" }}
+                  formatter={(value, _name, props) => {
+                    const count = Number(value) || 0;
+                    const status = (props.payload as { status: "have" | "gap" }).status;
+                    return [
+                      `${count} job${count === 1 ? "" : "s"}`,
+                      status === "have" ? "You have this" : "Gap in your resume",
+                    ];
+                  }}
+                />
+                <Bar dataKey="count" name="Demand" barSize={18} radius={[0, 4, 4, 0]}>
+                  {stats.skillsGap.topSkills.map((entry, i) => (
+                    <Cell key={i} fill={SKILL_STATUS_COLORS[entry.status]} />
+                  ))}
+                  <LabelList
+                    dataKey="count"
+                    position="right"
+                    style={{ fill: "#94a3b8", fontSize: 11 }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex gap-4 mt-3">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm"
+                  style={{ backgroundColor: SKILL_STATUS_COLORS.have }}
+                />
+                Have
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm"
+                  style={{ backgroundColor: SKILL_STATUS_COLORS.gap }}
+                />
+                Gap
+              </span>
+            </div>
+          </>
         )}
       </div>
 
