@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { parseBody } from "@/lib/validation";
+import { getOrSeedStages, isValidStageKey } from "@/lib/stages";
+
+const CreateApplicationSchema = z
+  .object({
+    jobId: z.string().min(1).optional(),
+    stage: z.string().min(1).max(50).optional(),
+    inlineJobData: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine((body) => body.jobId ?? body.inlineJobData, {
+    message: "Provide either jobId or inlineJobData",
+  });
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -25,15 +38,17 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const {
-    jobId,
-    stage = "Saved",
-    inlineJobData,
-  } = (await req.json()) as {
-    jobId?: string;
-    stage?: string;
-    inlineJobData?: object;
-  };
+  const { data, error } = await parseBody(req, CreateApplicationSchema);
+  if (error) return error;
+  const { jobId, inlineJobData } = data;
+
+  let stage = data.stage;
+  if (stage === undefined) {
+    const stages = await getOrSeedStages(user.id);
+    stage = stages[0]?.key ?? "Saved";
+  } else if (!(await isValidStageKey(user.id, stage))) {
+    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+  }
 
   // Prevent duplicate applications for the same job
   if (jobId) {
@@ -47,7 +62,7 @@ export async function POST(req: NextRequest) {
     data: {
       userId: user.id,
       jobId,
-      inlineJobData,
+      inlineJobData: inlineJobData as object,
       stage,
       lastActivityAt: new Date(),
     },

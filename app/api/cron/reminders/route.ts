@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import webpush from "web-push";
-
-// ── web-push setup ────────────────────────────────────────────────────────────
-
-webpush.setVapidDetails(
-  `mailto:${process.env.VAPID_CONTACT_EMAIL ?? "admin@example.com"}`,
-  process.env.VAPID_PUBLIC_KEY ?? "",
-  process.env.VAPID_PRIVATE_KEY ?? ""
-);
+import { notifyUser } from "@/lib/notifications";
 
 // ── Stages that should not receive follow-up reminders ───────────────────────
 
@@ -53,23 +45,16 @@ export async function GET(req: NextRequest) {
 
     const body = `Follow up on ${role} at ${company} — no response yet`;
 
-    for (const sub of app.user.pushSubscriptions) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify({
-            title: "Follow-up Reminder",
-            body,
-            icon: "/icons/icon-192.png",
-            url: "/pipeline",
-          })
-        );
-        sent++;
-      } catch {
-        // Expired subscription — remove it
-        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
-      }
-    }
+    const { pushed } = await notifyUser({
+      userId: app.user.id,
+      type: "follow_up_reminder",
+      title: "Follow-up Reminder",
+      body,
+      url: "/pipeline",
+      preferences: app.user.preferences,
+      subscriptions: app.user.pushSubscriptions,
+    });
+    sent += pushed;
 
     // Clear followUpAt regardless of whether a notification was sent
     await prisma.application.update({

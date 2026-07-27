@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { parseBody } from "@/lib/validation";
+
+const DeleteJobSchema = z.object({
+  id: z.string().min(1),
+});
 
 export async function GET(req: NextRequest) {
   const { userId: clerkId } = await auth();
@@ -58,9 +64,10 @@ export async function DELETE(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const { id } = (await req.json()) as { id: string };
+  const { data, error } = await parseBody(req, DeleteJobSchema);
+  if (error) return error;
 
-  await prisma.job.deleteMany({ where: { id, userId: user.id } });
+  await prisma.job.deleteMany({ where: { id: data.id, userId: user.id } });
 
   return NextResponse.json({ success: true });
 }

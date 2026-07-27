@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { JobDetailSheet } from "@/components/job-detail-sheet";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 interface JobEvaluation {
   overallScore: number | null;
@@ -245,7 +246,12 @@ function DiscoverPageContent() {
     <div className="flex h-full overflow-hidden">
       {/* Left: Job list */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
+        <PullToRefresh
+          className="flex-1"
+          onRefresh={async () => {
+            await scanMutation.mutateAsync().catch(() => {});
+          }}
+        >
           <div className="p-4 md:p-6 max-w-3xl mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
@@ -545,7 +551,7 @@ function DiscoverPageContent() {
               </div>
             )}
           </div>
-        </div>
+        </PullToRefresh>
       </div>
 
       {/* Right: Job detail panel */}

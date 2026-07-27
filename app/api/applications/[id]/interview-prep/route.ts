@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateObject } from "ai";
 import { flashModel } from "@/lib/ai";
 import { z } from "zod";
+import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
 
 const InterviewPrepSchema = z.object({
   questions: z.array(
@@ -20,6 +21,9 @@ const InterviewPrepSchema = z.object({
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = await checkRateLimit(aiRatelimit, clerkId);
+  if (limited) return limited;
 
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });

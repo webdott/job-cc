@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { parseBody } from "@/lib/validation";
+
+const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24h)");
+
+const NotificationPrefsSchema = z.object({
+  jobMatches: z.boolean().optional(),
+  followUpReminders: z.boolean().optional(),
+  quietHoursStart: timeOfDaySchema.nullable().optional(),
+  quietHoursEnd: timeOfDaySchema.nullable().optional(),
+});
+
+const PreferencesSchema = z.object({
+  targetRoles: z.array(z.string().max(200)).max(50).optional(),
+  locations: z.array(z.string().max(200)).max(50).optional(),
+  salaryMin: z.string().max(20).optional(),
+  salaryMax: z.string().max(20).optional(),
+  workType: z
+    .array(z.enum(["Remote", "Hybrid", "On-site"]))
+    .max(3)
+    .optional(),
+  notifications: NotificationPrefsSchema.optional(),
+});
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -15,7 +38,15 @@ export async function PATCH(req: NextRequest) {
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const clerkUser = await currentUser();
-  const preferences = await req.json();
+  const { data: patch, error } = await parseBody(req, PreferencesSchema);
+  if (error) return error;
+
+  // Preferences covers several unrelated sections (job prefs, notification
+  // settings, ...) saved independently from different parts of the UI — merge
+  // rather than replace so saving one section doesn't wipe out another.
+  const existing = await prisma.user.findUnique({ where: { clerkId } });
+  const existingPreferences = (existing?.preferences as Record<string, unknown>) ?? {};
+  const preferences = { ...existingPreferences, ...patch };
 
   const user = await prisma.user.upsert({
     where: { clerkId },

@@ -16,6 +16,22 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+// Mirrors the `md:` breakpoint (768px) the panel's own layout classes use —
+// keeps the slide direction in sync with whether it's rendered as a bottom
+// sheet (mobile) or a right-side panel (desktop).
+function useIsMobileViewport() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isMobile;
+}
+
 interface JobEvaluation {
   overallScore: number | null;
   recommendation: string | null;
@@ -126,6 +142,8 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
     },
   });
 
+  const isMobile = useIsMobileViewport();
+
   if (!job) return null;
 
   const evaluation = job.evaluation;
@@ -138,17 +156,18 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
         onClick={onClose}
       />
 
-      {/* Panel */}
+      {/* Panel — slides up from the bottom on mobile (bottom sheet), in from
+          the right on desktop (side panel), matching each layout's own CSS positioning above. */}
       <motion.div
-        initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 40 }}
+        initial={isMobile ? { opacity: 1, y: "100%" } : { opacity: 0, x: 40 }}
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        exit={isMobile ? { opacity: 1, y: "100%" } : { opacity: 0, x: 40 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn(
           // Mobile: bottom sheet — stop above the bottom tab bar (h-16)
           "fixed bottom-16 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col",
           // Desktop: right side panel — full height, no offset needed
-          "md:bottom-0 md:relative md:bottom-auto md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
+          "md:bottom-0 md:relative md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
         )}
       >
         {/* Header */}

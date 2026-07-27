@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { parseBody, dateStringSchema } from "@/lib/validation";
+
+const RemindSchema = z.object({
+  followUpAt: dateStringSchema,
+});
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { userId: clerkId } = await auth();
@@ -14,10 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   });
   if (!application) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = (await req.json()) as { followUpAt: string };
-  if (!body.followUpAt) {
-    return NextResponse.json({ error: "followUpAt is required" }, { status: 400 });
-  }
+  const { data: body, error } = await parseBody(req, RemindSchema);
+  if (error) return error;
 
   const updated = await prisma.application.update({
     where: { id: params.id },

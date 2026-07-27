@@ -8,6 +8,17 @@ import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
 import * as cheerio from "cheerio";
 import { stripToPlainText } from "@/lib/sanitize";
+import { parseBody } from "@/lib/validation";
+import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
+
+const ManualJobInputSchema = z
+  .object({
+    url: z.string().url().optional(),
+    rawText: z.string().min(1).max(20_000).optional(),
+  })
+  .refine((body) => body.url ?? body.rawText, {
+    message: "Provide either url or rawText",
+  });
 
 const JobFieldsSchema = z.object({
   title: z.string(),
@@ -23,14 +34,15 @@ export async function POST(req: NextRequest) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const limited = await checkRateLimit(aiRatelimit, clerkId);
+  if (limited) return limited;
+
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const { url, rawText } = (await req.json()) as { url?: string; rawText?: string };
-
-  if (!url && !rawText) {
-    return NextResponse.json({ error: "Provide either url or rawText" }, { status: 400 });
-  }
+  const { data, error } = await parseBody(req, ManualJobInputSchema);
+  if (error) return error;
+  const { url, rawText } = data;
 
   let textContent = rawText ?? "";
   const sourceUrl = url ?? `manual-${Date.now()}`;

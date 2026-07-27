@@ -3,6 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { uploadFile } from "@/lib/r2";
 import { parseResume } from "@/lib/resume-parser";
+import { LabelSchema } from "@/lib/validation";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse/lib/pdf-parse");
 import mammoth from "mammoth";
@@ -33,7 +34,14 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const label = (formData.get("label") as string) || "My Resume";
+    const rawLabel = formData.get("label");
+    const labelResult = LabelSchema.safeParse(
+      rawLabel && String(rawLabel).trim() ? rawLabel : "My Resume"
+    );
+    if (!labelResult.success) {
+      return NextResponse.json({ error: "Label must be 1-100 characters" }, { status: 400 });
+    }
+    const label = labelResult.data;
 
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
@@ -77,8 +85,14 @@ export async function POST(req: NextRequest) {
       update: {},
     });
 
-    // Check if this is the first resume
+    // Check if this is the first resume, and enforce the 3-resume cap
     const existingCount = await prisma.resume.count({ where: { userId: user.id } });
+    if (existingCount >= 3) {
+      return NextResponse.json(
+        { error: "You can have at most 3 resumes. Delete one before uploading another." },
+        { status: 400 }
+      );
+    }
 
     // Upload to R2
     const key = `resumes/${user.id}/${Date.now()}-${label.replace(/\s+/g, "-")}.${file.type === "application/pdf" ? "pdf" : "docx"}`;

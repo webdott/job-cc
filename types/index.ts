@@ -66,18 +66,9 @@ export type ResumeWithCoverLetters = Prisma.ResumeGetPayload<{
 export type { JobStatus, Recommendation } from "@prisma/client";
 
 // ─── Application stage ───────────────────────────────────────────────────────
-// (stored as string in DB, these are the valid values)
-
-export type ApplicationStage =
-  | "Saved"
-  | "Applied"
-  | "Screening"
-  | "Interview"
-  | "Offer"
-  | "Rejected"
-  | "Ghosted"
-  | "Withdrawn"
-  | "Archived";
+// Stored as a free-text string on Application.stage. Valid values are the
+// user's own Stage rows (customizable, see lib/stages.ts) plus the fixed
+// inactive statuses in lib/stage-constants.ts (Ghosted/Withdrawn/Archived).
 
 // ─── Parsed resume ───────────────────────────────────────────────────────────
 
