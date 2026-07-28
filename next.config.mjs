@@ -50,8 +50,8 @@ const pwaConfig = withPWA({
 const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: ["localhost:3000", "job-cc.vercel.app"] },
+    serverComponentsExternalPackages: ["pdf-parse", "mammoth", "sanitize-html"],
   },
-  serverExternalPackages: ["pdf-parse", "mammoth", "sanitize-html"],
 };
 
 export default pwaConfig(nextConfig);

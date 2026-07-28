@@ -17,6 +17,12 @@ setup("global setup", async () => {
 });
 
 setup("authenticate, seed an active resume, and save storage state", async ({ page }) => {
+  // This test's two goto("/") calls are the very first authenticated hits
+  // against `next dev`, which compiles the whole (dashboard) route tree
+  // on demand — comfortably under the default 30s locally, but slow
+  // enough on CI's shared runners to blow past it. Give it more room.
+  setup.setTimeout(90_000);
+
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: testEmail });
 
