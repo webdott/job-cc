@@ -26,8 +26,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       try {
         const res = await fetch("/api/user/me");
         if (!res.ok) return;
-        const data = (await res.json()) as { hasResume: boolean };
-        if (!data.hasResume) {
+        const data = (await res.json()) as { hasResume: boolean; needsByocSetup: boolean };
+        if (!data.hasResume || data.needsByocSetup) {
           router.push("/onboarding");
         }
       } catch {

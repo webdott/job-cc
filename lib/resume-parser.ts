@@ -1,6 +1,6 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { flashModel } from "@/lib/ai";
+import type { ModelHandle } from "@/lib/ai";
 
 const ParsedResumeSchema = z.object({
   name: z.string(),
@@ -27,9 +27,9 @@ const ParsedResumeSchema = z.object({
 
 export type ParsedResume = z.infer<typeof ParsedResumeSchema>;
 
-export async function parseResume(text: string): Promise<ParsedResume> {
+export async function parseResume(text: string, model: ModelHandle): Promise<ParsedResume> {
   const { object } = await generateObject({
-    model: flashModel,
+    model,
     schema: ParsedResumeSchema,
     prompt: `You are a resume parser. Extract structured data from the following resume text.
 

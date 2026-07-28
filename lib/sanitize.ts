@@ -24,8 +24,10 @@ export function sanitizeJobDescription(input: string): string {
       "a",
     ],
     allowedAttributes: {
-      // Only allow href on links, and force safe values
-      a: ["href"],
+      // href is user-controlled (rewritten below); target/rel are the fixed
+      // safe-new-tab values transformTags injects — both must be allowlisted
+      // or sanitize-html strips them right back out after the transform.
+      a: ["href", "target", "rel"],
     },
     allowedSchemes: ["https", "http", "mailto"],
     // Strip all other attributes (style, class, id, data-*, on*)

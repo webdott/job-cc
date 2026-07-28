@@ -1,7 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
-import { flashModel } from "@/lib/ai";
 import type { ParsedResume } from "@/lib/resume-parser";
+import type { ModelHandle } from "@/lib/ai";
 
 const JobScoreSchema = z.object({
   overallScore: z.number().min(0).max(100),
@@ -15,10 +15,11 @@ export type JobScore = z.infer<typeof JobScoreSchema>;
 export async function scoreJob(
   jobDescription: string,
   jobTitle: string,
-  resume: ParsedResume
+  resume: ParsedResume,
+  model: ModelHandle
 ): Promise<JobScore> {
   const { object } = await generateObject({
-    model: flashModel,
+    model,
     schema: JobScoreSchema,
     prompt: `You are a career advisor scoring job fit. Score how well this candidate matches the job.
 
