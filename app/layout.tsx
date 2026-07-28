@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // Remove this pin once @clerk/nextjs is upgraded to a release that
   // supports v6 and the whole auth flow is retested.
   return (
-    <ClerkProvider clerkJSVersion="5">
+    <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
         <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
           <Providers>{children}</Providers>
