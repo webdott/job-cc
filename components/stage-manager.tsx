@@ -142,15 +142,21 @@ export function StageManager({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stage-manager-heading"
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.15 }}
         className="relative bg-card border border-border rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border sticky top-0 bg-card">
-          <h2 className="text-sm font-medium text-foreground">Manage stages</h2>
+          <h2 id="stage-manager-heading" className="text-sm font-medium text-foreground">
+            Manage stages
+          </h2>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="p-1 rounded text-muted-foreground/70 hover:text-foreground transition-colors"
           >
             <X className="h-4 w-4" />
@@ -182,6 +188,7 @@ export function StageManager({ onClose }: { onClose: () => void }) {
                 <button
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
+                  aria-label="Move up"
                   className="p-1 rounded text-muted-foreground/50 hover:text-foreground disabled:opacity-30 transition-colors"
                 >
                   <ChevronUp className="h-3.5 w-3.5" />
@@ -189,6 +196,7 @@ export function StageManager({ onClose }: { onClose: () => void }) {
                 <button
                   onClick={() => move(i, 1)}
                   disabled={i === stages.length - 1}
+                  aria-label="Move down"
                   className="p-1 rounded text-muted-foreground/50 hover:text-foreground disabled:opacity-30 transition-colors"
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -196,6 +204,7 @@ export function StageManager({ onClose }: { onClose: () => void }) {
                 {editingId === stage.id ? (
                   <button
                     onClick={() => saveEdit(stage.id)}
+                    aria-label="Save"
                     className="p-1 rounded text-green-400 hover:text-green-300 transition-colors"
                   >
                     <Check className="h-3.5 w-3.5" />
@@ -203,6 +212,7 @@ export function StageManager({ onClose }: { onClose: () => void }) {
                 ) : (
                   <button
                     onClick={() => startEdit(stage)}
+                    aria-label="Edit stage"
                     className="p-1 rounded text-muted-foreground/50 hover:text-blue-400 transition-colors"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -211,6 +221,7 @@ export function StageManager({ onClose }: { onClose: () => void }) {
                 <button
                   onClick={() => deleteMutation.mutate(stage.id)}
                   disabled={deleteMutation.isPending}
+                  aria-label="Delete stage"
                   className="p-1 rounded text-muted-foreground/50 hover:text-red-400 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
