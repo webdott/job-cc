@@ -28,8 +28,14 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Pinned: Clerk's CDN now defaults unpinned installs to clerk-js v6, which
+  // breaks this app's custom /sign-in page — it redirects to Clerk's hosted
+  // Account Portal instead, looping through the dev-browser handshake until
+  // Clerk itself 429s. Confirmed by forcing clerkJSVersion="6" locally and
+  // reproducing the same failure. Remove this pin only after migrating to
+  // and testing against v6.
   return (
-    <ClerkProvider>
+    <ClerkProvider clerkJSVersion="5">
       <html lang="en" suppressHydrationWarning>
         <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
           <Providers>{children}</Providers>
