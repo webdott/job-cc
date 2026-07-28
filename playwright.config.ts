@@ -13,7 +13,10 @@ export default defineConfig({
   reporter: [["html", { open: "never" }]],
   use: {
     baseURL,
-    trace: "on-first-retry",
+    // "on-first-retry" never fires with retries: 0 (the default) — CI has
+    // never had a real trace to inspect a single e2e failure with.
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
   webServer: {
     command: `npx next dev -p ${PORT}`,

@@ -23,6 +23,18 @@ setup("authenticate, seed an active resume, and save storage state", async ({ pa
   // enough on CI's shared runners to blow past it. Give it more room.
   setup.setTimeout(90_000);
 
+  // Diagnostics: CI has failed here with no clear cause visible in the
+  // default reporter output — surface browser-side errors and every
+  // response directly in the CI log instead of only in a downloadable trace.
+  page.on("console", (msg) => {
+    if (msg.type() === "error") console.log(`[browser console error] ${msg.text()}`);
+  });
+  page.on("pageerror", (err) => console.log(`[browser page error] ${err.message}`));
+  page.on("response", (res) => console.log(`[response] ${res.status()} ${res.url()}`));
+  page.on("requestfailed", (req) =>
+    console.log(`[request failed] ${req.url()} ${req.failure()?.errorText}`)
+  );
+
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: testEmail });
 
