@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { generateObject } from "ai";
-import { flashModel } from "@/lib/ai";
 import { z } from "zod";
-import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
+import { requireUserCredentials } from "@/lib/byoc";
 
 const InterviewPrepSchema = z.object({
   questions: z.array(
@@ -22,11 +21,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = await checkRateLimit(aiRatelimit, clerkId);
-  if (limited) return limited;
-
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const { data: creds, error: credError } = await requireUserCredentials(user.email, user.id);
+  if (credError) return credError;
 
   const application = await prisma.application.findFirst({
     where: { id: params.id, userId: user.id },
@@ -65,7 +64,7 @@ ${(parsedData.experience ?? [])
 `.trim();
 
   const { object } = await generateObject({
-    model: flashModel,
+    model: creds.ai.flashModel,
     schema: InterviewPrepSchema,
     prompt: `You are an interview coach preparing a candidate for a job interview.
 

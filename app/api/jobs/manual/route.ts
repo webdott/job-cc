@@ -3,13 +3,12 @@ import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { flashModel } from "@/lib/ai";
 import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
 import * as cheerio from "cheerio";
 import { stripToPlainText } from "@/lib/sanitize";
 import { parseBody } from "@/lib/validation";
-import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
+import { requireUserCredentials } from "@/lib/byoc";
 
 const ManualJobInputSchema = z
   .object({
@@ -34,11 +33,11 @@ export async function POST(req: NextRequest) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = await checkRateLimit(aiRatelimit, clerkId);
-  if (limited) return limited;
-
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+  const { data: creds, error: credError } = await requireUserCredentials(user.email, user.id);
+  if (credError) return credError;
 
   const { data, error } = await parseBody(req, ManualJobInputSchema);
   if (error) return error;
@@ -62,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   // Extract job fields with AI
   const { object: fields } = await generateObject({
-    model: flashModel,
+    model: creds.ai.flashModel,
     schema: JobFieldsSchema,
     prompt: `Extract job posting details from the following text. If salary isn't mentioned, omit it. Detect if the role is remote.
 
@@ -93,7 +92,7 @@ ${textContent}`,
 
   if (activeResume) {
     const parsedData = activeResume.parsedData as ParsedResume;
-    const score = await scoreJob(job.description, job.title, parsedData);
+    const score = await scoreJob(job.description, job.title, parsedData, creds.ai.flashModel);
     evaluation = await prisma.jobEvaluation.create({
       data: {
         jobId: job.id,

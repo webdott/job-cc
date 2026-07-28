@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { uploadFile } from "@/lib/r2";
 import { parseResume } from "@/lib/resume-parser";
 import { LabelSchema } from "@/lib/validation";
+import { requireUserCredentials } from "@/lib/byoc";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse/lib/pdf-parse");
 import mammoth from "mammoth";
@@ -94,12 +94,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { data: creds, error: credError } = await requireUserCredentials(user.email, user.id);
+    if (credError) return credError;
+
     // Upload to R2
     const key = `resumes/${user.id}/${Date.now()}-${label.replace(/\s+/g, "-")}.${file.type === "application/pdf" ? "pdf" : "docx"}`;
-    const fileUrl = await uploadFile(key, buffer, file.type);
+    const fileUrl = await creds.r2.uploadFile(key, buffer, file.type);
 
     // Parse with AI
-    const parsed = await parseResume(text);
+    const parsed = await parseResume(text, creds.ai.flashModel);
 
     // Save to DB
     const resume = await prisma.resume.create({

@@ -3,9 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { deleteFile } from "@/lib/r2";
 import { LabelSchema } from "@/lib/validation";
 import type { ParsedResume } from "@/lib/resume-parser";
+import { requireUserCredentials } from "@/lib/byoc";
 
 const ExperienceSchema = z.object({
   title: z.string().min(1).max(200),
@@ -82,6 +82,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const resume = await prisma.resume.findFirst({ where: { id: params.id, userId: user.id } });
   if (!resume) return NextResponse.json({ error: "Resume not found" }, { status: 404 });
 
+  const { data: creds, error: credError } = await requireUserCredentials(user.email, user.id);
+  if (credError) return credError;
+
   try {
     await prisma.resume.delete({ where: { id: resume.id } });
   } catch (err) {
@@ -105,9 +108,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   // Best-effort R2 cleanup — the DB row is already gone either way
   try {
-    const publicBase = process.env.CLOUDFLARE_R2_PUBLIC_URL!.replace(/\/$/, "");
+    const publicBase = creds.r2.publicUrl.replace(/\/$/, "");
     if (resume.fileUrl.startsWith(publicBase)) {
-      await deleteFile(resume.fileUrl.slice(publicBase.length + 1));
+      await creds.r2.deleteFile(resume.fileUrl.slice(publicBase.length + 1));
     }
   } catch (err) {
     console.error("Failed to delete resume file from R2:", err);

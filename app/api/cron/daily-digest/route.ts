@@ -5,6 +5,7 @@ import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
 import { notifyUser } from "@/lib/notifications";
 import type { ParsedResume } from "@/lib/resume-parser";
 import { parseHNListing, HN_LOW_CONFIDENCE_NOTICE } from "@/lib/hn-job-parser";
+import { resolveUserCredentials } from "@/lib/byoc";
 
 // ── Job fetch helpers (mirrors /api/jobs/discover) ───────────────────────────
 
@@ -173,6 +174,9 @@ export async function GET(req: NextRequest) {
     const activeResume = user.resumes[0] ?? null;
     if (!activeResume) continue;
 
+    const credentials = await resolveUserCredentials(user.email, user.id);
+    if (!credentials) continue; // non-allowlisted user with no saved/verified BYOC credentials
+
     const parsedData = activeResume.parsedData as ParsedResume;
     const newJobs = [];
     let bestJob: { title: string; company: string; score: number } | null = null;
@@ -190,7 +194,12 @@ export async function GET(req: NextRequest) {
         if (!isNew) continue;
 
         // Score the new job
-        const score = await scoreJob(job.description, job.title, parsedData);
+        const score = await scoreJob(
+          job.description,
+          job.title,
+          parsedData,
+          credentials.ai.flashModel
+        );
 
         await prisma.jobEvaluation.upsert({
           where: { jobId: job.id },

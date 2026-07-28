@@ -3,9 +3,10 @@ import type { ParsedResume } from "@/lib/resume-parser";
 
 const { generateObjectMock } = vi.hoisted(() => ({ generateObjectMock: vi.fn() }));
 vi.mock("ai", () => ({ generateObject: generateObjectMock }));
-vi.mock("@/lib/ai", () => ({ flashModel: "mock-flash-model" }));
 
 import { scoreJob } from "@/lib/job-scorer";
+
+const mockModel = "mock-model" as unknown as Parameters<typeof scoreJob>[3];
 
 const resume: ParsedResume = {
   name: "Ada Lovelace",
@@ -30,11 +31,11 @@ describe("scoreJob", () => {
     generateObjectMock.mockResolvedValueOnce({ object: validScore });
 
     const longDescription = "x".repeat(4000);
-    const result = await scoreJob(longDescription, "Solutions Architect", resume);
+    const result = await scoreJob(longDescription, "Solutions Architect", resume, mockModel);
 
     expect(result).toEqual(validScore);
     const call = generateObjectMock.mock.calls[0][0];
-    expect(call.model).toBe("mock-flash-model");
+    expect(call.model).toBe(mockModel);
     expect(call.prompt).toContain("TypeScript, React");
     expect(call.prompt).toContain("Solutions Architect");
     // description is sliced to 3000 chars before being embedded
@@ -44,6 +45,6 @@ describe("scoreJob", () => {
 
   it("propagates errors from generateObject", async () => {
     generateObjectMock.mockRejectedValueOnce(new Error("rate limited"));
-    await expect(scoreJob("desc", "Engineer", resume)).rejects.toThrow("rate limited");
+    await expect(scoreJob("desc", "Engineer", resume, mockModel)).rejects.toThrow("rate limited");
   });
 });

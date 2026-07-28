@@ -19,22 +19,47 @@ enum Recommendation {
   MAYBE
 }
 
+enum AiProvider {
+  GOOGLE
+  ANTHROPIC
+}
+
 model User {
-  id               String            @id @default(cuid())
-  clerkId          String            @unique
-  email            String            @unique
-  name             String?
-  preferences      Json              @default("{}")
-  pushSubscription Json?
-  createdAt        DateTime          @default(now())
-  resumes          Resume[]
-  jobs             Job[]
-  applications     Application[]
-  evaluations      JobEvaluation[]
-  interviewStories InterviewStory[]
+  id                String             @id @default(cuid())
+  clerkId           String             @unique
+  email             String             @unique
+  name              String?
+  preferences       Json               @default("{}")
+  pushSubscription  Json?
+  createdAt         DateTime           @default(now())
+  resumes           Resume[]
+  jobs              Job[]
+  applications      Application[]
+  evaluations       JobEvaluation[]
+  interviewStories  InterviewStory[]
   pushSubscriptions PushSubscription[]
-  notifications    Notification[]
-  stages           Stage[]
+  notifications     Notification[]
+  stages            Stage[]
+  credentials       UserCredentials?
+}
+
+// Encrypted BYOC credentials for non-allowlisted users (see lib/byoc.ts).
+// Allowlisted users never have a row here — they use the operator's own
+// env-configured Gemini/Anthropic + R2 credentials.
+model UserCredentials {
+  id                   String     @id @default(cuid())
+  userId               String     @unique
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aiProvider           AiProvider
+  aiApiKeyEnc          String
+  r2AccountIdEnc       String
+  r2AccessKeyIdEnc     String
+  r2SecretAccessKeyEnc String
+  r2BucketNameEnc      String
+  r2PublicUrlEnc       String
+  verifiedAt           DateTime
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 }
 
 model Resume {
@@ -54,24 +79,24 @@ model Resume {
 }
 
 model Job {
-  id             String         @id @default(cuid())
-  sourceUrl      String
-  sourceId       String?
-  title          String
-  company        String
-  location       String?
-  description    String
-  salaryMin      Int?
-  salaryMax      Int?
-  remote         Boolean        @default(false)
-  postedAt       DateTime?
-  fetchedAt      DateTime       @default(now())
-  status         JobStatus      @default(UNSEEN)
-  userId         String
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  evaluation     JobEvaluation?
-  applications   Application[]
-  pdfExports     PdfExport[]
+  id           String         @id @default(cuid())
+  sourceUrl    String
+  sourceId     String?
+  title        String
+  company      String
+  location     String?
+  description  String
+  salaryMin    Int?
+  salaryMax    Int?
+  remote       Boolean        @default(false)
+  postedAt     DateTime?
+  fetchedAt    DateTime       @default(now())
+  status       JobStatus      @default(UNSEEN)
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evaluation   JobEvaluation?
+  applications Application[]
+  pdfExports   PdfExport[]
 
   @@unique([sourceUrl, userId])
 }
@@ -132,32 +157,32 @@ model CoverLetter {
 }
 
 model InterviewStory {
-  id                    String   @id @default(cuid())
-  userId                String
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title                 String
-  situation             String
-  task                  String
-  action                String
-  result                String
-  reflection            String?
-  skills                String[] @default([])
-  usedInApplicationIds  String[] @default([])
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                String
+  situation            String
+  task                 String
+  action               String
+  result               String
+  reflection           String?
+  skills               String[] @default([])
+  usedInApplicationIds String[] @default([])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model PdfExport {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   resumeId      String
-  resume        Resume   @relation(fields: [resumeId], references: [id])
+  resume        Resume      @relation(fields: [resumeId], references: [id])
   jobId         String?
-  job           Job?     @relation(fields: [jobId], references: [id])
+  job           Job?        @relation(fields: [jobId], references: [id])
   filePath      String
-  keywords      String[] @default([])
-  createdAt     DateTime @default(now())
+  keywords      String[]    @default([])
+  createdAt     DateTime    @default(now())
 }
 
 model PushSubscription {

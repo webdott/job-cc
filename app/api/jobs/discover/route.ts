@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { scoreJob } from "@/lib/job-scorer";
 import type { ParsedResume } from "@/lib/resume-parser";
 import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
-import { aiRatelimit, checkRateLimit } from "@/lib/rate-limit";
+import { requireUserCredentials } from "@/lib/byoc";
 import { parseHNListing, HN_LOW_CONFIDENCE_NOTICE } from "@/lib/hn-job-parser";
 
 interface RemotiveJob {
@@ -142,11 +142,11 @@ export async function POST() {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = await checkRateLimit(aiRatelimit, clerkId);
-  if (limited) return limited;
-
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "Complete onboarding first" }, { status: 400 });
+
+  const { data: creds, error: credError } = await requireUserCredentials(user.email, user.id);
+  if (credError) return credError;
 
   // Get active resume for scoring
   const activeResume = await prisma.resume.findFirst({
@@ -180,7 +180,7 @@ export async function POST() {
     if (activeResume && isNew) {
       try {
         const parsedData = activeResume.parsedData as ParsedResume;
-        const score = await scoreJob(job.description, job.title, parsedData);
+        const score = await scoreJob(job.description, job.title, parsedData, creds.ai.flashModel);
 
         await prisma.jobEvaluation.upsert({
           where: { jobId: job.id },

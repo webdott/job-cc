@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { isAllowlisted } from "@/lib/allowlist";
 
 // GET /api/user/me — upsert user on first load, return their profile
 export async function GET() {
@@ -23,11 +24,16 @@ export async function GET() {
     },
     include: {
       resumes: { where: { isActive: true }, take: 1 },
+      credentials: { select: { id: true } },
     },
   });
+
+  const allowlisted = isAllowlisted(user.email);
 
   return NextResponse.json({
     user,
     hasResume: user.resumes.length > 0,
+    isAllowlisted: allowlisted,
+    needsByocSetup: !allowlisted && !user.credentials,
   });
 }
