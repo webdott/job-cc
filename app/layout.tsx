@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dividerText: "text-muted-foreground",
           formFieldLabel: "text-foreground",
           formFieldInput: "bg-background border-border text-foreground",
-          formButtonPrimary: "bg-accent hover:bg-accent-hover text-white",
+          formButtonPrimary: "bg-accent hover:bg-accent-hover text-white border-border",
           footerActionText: "text-muted-foreground",
           footerActionLink: "text-accent hover:text-accent-hover",
           identityPreviewText: "text-foreground",
