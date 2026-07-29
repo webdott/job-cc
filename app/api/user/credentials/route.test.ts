@@ -191,4 +191,59 @@ describe("POST /api/user/credentials", () => {
     expect(stored.aiProvider).toBe("ANTHROPIC");
     expect(await prisma.userCredentials.count({ where: { userId: user.id } })).toBe(1);
   });
+
+  it("allows updating only the AI key and skips re-verifying R2/Brevo", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await POST(credentialsRequest(validBody));
+
+    generateTextMock.mockClear();
+    uploadFileMock.mockClear();
+    deleteFileMock.mockClear();
+    verifyBrevoMock.mockClear();
+
+    const res = await POST(
+      credentialsRequest({
+        aiProvider: "GOOGLE",
+        aiApiKey: "AIzaReplacementKeyForTesting999",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(uploadFileMock).not.toHaveBeenCalled();
+    expect(verifyBrevoMock).not.toHaveBeenCalled();
+  });
+
+  it("allows updating only Brevo and merges the stored sender when omitted", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await POST(credentialsRequest(validBody));
+
+    generateTextMock.mockClear();
+    uploadFileMock.mockClear();
+    verifyBrevoMock.mockClear();
+
+    const res = await POST(
+      credentialsRequest({
+        brevoApiKey: "xkeysib-replacement-brevo-key-zzz",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(verifyBrevoMock).toHaveBeenCalledWith(
+      "xkeysib-replacement-brevo-key-zzz",
+      validBody.brevoFromEmail
+    );
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(uploadFileMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty update when credentials already exist", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await POST(credentialsRequest(validBody));
+
+    const res = await POST(credentialsRequest({ aiProvider: "GOOGLE" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/at least one new value/i);
+  });
 });

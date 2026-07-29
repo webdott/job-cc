@@ -7,19 +7,31 @@ import { Section } from "./section";
 import { useCredentialsSection } from "./use-credentials-section";
 
 export function CredentialsSection() {
-  const { isAllowlisted, credStatus, byoc, setByoc, byocFieldError, byocSaved, byocMutation } =
-    useCredentialsSection();
+  const {
+    isAllowlisted,
+    credStatus,
+    byoc,
+    setByoc,
+    byocFieldError,
+    byocSaved,
+    byocMutation,
+    hasCredentials,
+    canSubmit,
+  } = useCredentialsSection();
 
   if (isAllowlisted) return null;
 
+  const keepHint = hasCredentials ? " — leave blank to keep current" : "";
+
   return (
     <Section title="AI, Storage & Email Credentials">
-      {credStatus?.hasCredentials && !byocMutation.isPending && (
+      {hasCredentials && !byocMutation.isPending && (
         <div className="flex items-center gap-2 mb-4 text-sm text-green-400 bg-green-500/10 px-3 py-2 rounded-lg">
           <CheckCircle className="h-4 w-4 shrink-0" />
           Connected — using{" "}
-          {credStatus.aiProvider ? getProviderLabel(credStatus.aiProvider) : "an AI provider"}.
-          Submit below to switch provider or update a revoked key.
+          {credStatus?.aiProvider ? getProviderLabel(credStatus.aiProvider) : "an AI provider"}.
+          Update any field below; blank fields stay as they are. Changed values are verified before
+          saving.
         </div>
       )}
 
@@ -52,7 +64,7 @@ export function CredentialsSection() {
           </a>
           <input
             type="password"
-            placeholder="API key"
+            placeholder={hasCredentials ? `API key${keepHint}` : "API key"}
             value={byoc.aiApiKey}
             onChange={(e) => setByoc((b) => ({ ...b, aiApiKey: e.target.value }))}
             className={cn(
@@ -84,35 +96,39 @@ export function CredentialsSection() {
           >
             <input
               type="text"
-              placeholder="Account ID"
+              placeholder={hasCredentials ? `Account ID${keepHint}` : "Account ID"}
               value={byoc.r2AccountId}
               onChange={(e) => setByoc((b) => ({ ...b, r2AccountId: e.target.value }))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
             />
             <input
               type="password"
-              placeholder="Access key ID"
+              placeholder={hasCredentials ? `Access key ID${keepHint}` : "Access key ID"}
               value={byoc.r2AccessKeyId}
               onChange={(e) => setByoc((b) => ({ ...b, r2AccessKeyId: e.target.value }))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
             />
             <input
               type="password"
-              placeholder="Secret access key"
+              placeholder={hasCredentials ? `Secret access key${keepHint}` : "Secret access key"}
               value={byoc.r2SecretAccessKey}
               onChange={(e) => setByoc((b) => ({ ...b, r2SecretAccessKey: e.target.value }))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
             />
             <input
               type="text"
-              placeholder="Bucket name"
+              placeholder={hasCredentials ? `Bucket name${keepHint}` : "Bucket name"}
               value={byoc.r2BucketName}
               onChange={(e) => setByoc((b) => ({ ...b, r2BucketName: e.target.value }))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
             />
             <input
               type="text"
-              placeholder="Public URL (e.g. https://pub-xxxx.r2.dev)"
+              placeholder={
+                hasCredentials
+                  ? `Public URL${keepHint}`
+                  : "Public URL (e.g. https://pub-xxxx.r2.dev)"
+              }
               value={byoc.r2PublicUrl}
               onChange={(e) => setByoc((b) => ({ ...b, r2PublicUrl: e.target.value }))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
@@ -146,7 +162,7 @@ export function CredentialsSection() {
           >
             <input
               type="password"
-              placeholder="API key"
+              placeholder={hasCredentials ? `API key${keepHint}` : "API key"}
               value={byoc.brevoApiKey}
               onChange={(e) => setByoc((b) => ({ ...b, brevoApiKey: e.target.value }))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
@@ -154,7 +170,11 @@ export function CredentialsSection() {
             <div className="flex items-center justify-between gap-2">
               <input
                 type="email"
-                placeholder="Verified sender email (from)"
+                placeholder={
+                  hasCredentials
+                    ? `Verified sender email${keepHint}`
+                    : "Verified sender email (from)"
+                }
                 value={byoc.brevoFromEmail}
                 onChange={(e) => setByoc((b) => ({ ...b, brevoFromEmail: e.target.value }))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
@@ -177,17 +197,7 @@ export function CredentialsSection() {
 
         <button
           onClick={() => byocMutation.mutate(byoc)}
-          disabled={
-            byocMutation.isPending ||
-            !byoc.aiApiKey ||
-            !byoc.r2AccountId ||
-            !byoc.r2AccessKeyId ||
-            !byoc.r2SecretAccessKey ||
-            !byoc.r2BucketName ||
-            !byoc.r2PublicUrl ||
-            !byoc.brevoApiKey ||
-            !byoc.brevoFromEmail
-          }
+          disabled={byocMutation.isPending || !canSubmit}
           className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
         >
           {byocMutation.isPending ? (
@@ -201,7 +211,7 @@ export function CredentialsSection() {
             ? "Saved!"
             : byocMutation.isPending
               ? "Verifying…"
-              : credStatus?.hasCredentials
+              : hasCredentials
                 ? "Update credentials"
                 : "Save credentials"}
         </button>
