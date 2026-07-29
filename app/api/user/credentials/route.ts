@@ -19,6 +19,25 @@ const CredentialsSchema = z.object({
   r2PublicUrl: z.string().url(),
 });
 
+function statusCodeFromError(err: unknown): number | undefined {
+  if (err && typeof err === "object" && "statusCode" in err) {
+    const code = (err as { statusCode: unknown }).statusCode;
+    return typeof code === "number" ? code : undefined;
+  }
+  return undefined;
+}
+
+function aiKeyVerifyErrorMessage(err: unknown): string {
+  const status = statusCodeFromError(err);
+  if (status === 429) {
+    return "This API key is rate-limited or out of quota — check your provider billing and try again.";
+  }
+  if (status === 401 || status === 403) {
+    return "Couldn't verify this API key — double-check it and try again.";
+  }
+  return "Couldn't verify this API key — double-check it and try again.";
+}
+
 // GET /api/user/credentials — never returns plaintext, just whether creds are on file
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -51,14 +70,25 @@ export async function POST(req: NextRequest) {
   const { data, error } = await parseBody(req, CredentialsSchema);
   if (error) return error;
 
+  const aiApiKey = data.aiApiKey.trim();
+
   try {
-    const { flashModel } = buildModelsForProvider(data.aiProvider, data.aiApiKey);
-    await generateText({ model: flashModel, prompt: "ping", maxOutputTokens: 5 });
-  } catch {
-    return NextResponse.json(
-      { error: "Couldn't verify this API key — double-check it and try again.", field: "ai" },
-      { status: 400 }
-    );
+    const { flashModel } = buildModelsForProvider(data.aiProvider, aiApiKey);
+    await generateText({
+      model: flashModel,
+      prompt: "ping",
+      maxOutputTokens: 64,
+      ...(data.aiProvider === "GOOGLE"
+        ? {
+            providerOptions: {
+              google: { thinkingConfig: { thinkingBudget: 0 } },
+            },
+          }
+        : {}),
+    });
+  } catch (err) {
+    console.error("[credentials] AI key verification failed:", err);
+    return NextResponse.json({ error: aiKeyVerifyErrorMessage(err), field: "ai" }, { status: 400 });
   }
 
   const r2 = createR2Client({
@@ -87,7 +117,7 @@ export async function POST(req: NextRequest) {
 
   const encrypted = {
     aiProvider: data.aiProvider,
-    aiApiKeyEnc: encrypt(data.aiApiKey),
+    aiApiKeyEnc: encrypt(aiApiKey),
     r2AccountIdEnc: encrypt(data.r2AccountId),
     r2AccessKeyIdEnc: encrypt(data.r2AccessKeyId),
     r2SecretAccessKeyEnc: encrypt(data.r2SecretAccessKey),

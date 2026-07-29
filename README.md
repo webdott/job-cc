@@ -78,6 +78,14 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Test app
+
+```bash
+pnpm run db:test:up
+pnpm run db:test:push   # once, or after schema changes
+pnpm run test
+```
+
 ---
 
 ## Environment Variables

@@ -99,7 +99,35 @@ describe("POST /api/user/credentials", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.field).toBe("ai");
+    expect(body.error).toMatch(/Couldn't verify this API key/);
     expect(uploadFileMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a quota message when verification fails with 429", async () => {
+    generateTextMock.mockRejectedValueOnce(Object.assign(new Error("quota"), { statusCode: 429 }));
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    const res = await POST(credentialsRequest(validBody));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.field).toBe("ai");
+    expect(body.error).toMatch(/rate-limited or out of quota/);
+  });
+
+  it("trims the AI API key and uses a safer ping before storing", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    await POST(credentialsRequest({ ...validBody, aiApiKey: `  ${validBody.aiApiKey}  ` }));
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "ping",
+        maxOutputTokens: 64,
+        providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+      })
+    );
   });
 
   it("returns an r2-scoped 400 when the R2 round trip fails", async () => {

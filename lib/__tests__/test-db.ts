@@ -12,6 +12,7 @@ const TABLES = [
   "Stage",
   "Resume",
   "User",
+  "UserCredentials",
 ];
 
 /**
