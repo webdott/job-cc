@@ -5,8 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Home, Layers, Search, BarChart2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { NotificationBell } from "@/components/notification-bell";
+import { SignOutButton } from "@/components/sign-out-button";
 
 const navItems = [
   { href: "/", label: "Home", icon: Home },
@@ -43,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar — desktop only */}
       <aside className="hidden md:flex md:flex-col w-60 border-r border-border bg-card shrink-0">
-        <div className="h-16 flex items-center px-6 border-b border-border">
+        <div className="h-14 flex items-center px-6 border-b border-border">
           <span className="text-lg font-semibold tracking-tight">
             Job<span className="text-blue-500">CC</span>
           </span>
@@ -70,23 +71,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
-        <header className="h-14 flex items-center justify-end px-4 md:px-6 border-b border-border shrink-0">
+        <header className="h-14 flex items-center justify-end gap-1 px-4 md:px-6 border-b border-border shrink-0">
           <NotificationBell />
+          <SignOutButton />
         </header>
 
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-              className="h-full"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          {/* Enter-only: AnimatePresence mode="wait" can leave App Router navigations stuck blank */}
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="h-full"
+          >
+            {children}
+          </motion.div>
         </main>
 
         {/* Bottom tab bar — mobile only */}

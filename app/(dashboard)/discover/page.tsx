@@ -15,7 +15,15 @@ import { Pagination } from "./components/pagination";
 
 export default function DiscoverPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <JobCardSkeleton key={i} />
+          ))}
+        </div>
+      }
+    >
       <DiscoverPageContent />
     </Suspense>
   );

@@ -64,7 +64,7 @@ function StatCard({
           <Icon className="h-3.5 w-3.5" />
         </div>
       </div>
-      <p className="text-2xl font-semibold text-white">{value}</p>
+      <p className="text-2xl font-semibold text-foreground">{value}</p>
       {sub && <p className="text-xs text-muted-foreground/70 mt-1">{sub}</p>}
     </div>
   );
@@ -111,7 +111,7 @@ export default function AnalyticsPage() {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-white">Analytics</h1>
+        <h1 className="text-xl font-semibold text-foreground">Analytics</h1>
         <p className="text-muted-foreground text-sm">Your job search performance at a glance</p>
       </div>
 

@@ -22,7 +22,7 @@ export function StepResume({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-white mb-1">Upload your resume</h2>
+      <h2 className="text-lg font-semibold text-foreground mb-1">Upload your resume</h2>
       <p className="text-muted-foreground text-sm mb-6">
         PDF or DOCX, up to 5MB. AI will parse it automatically.
       </p>
@@ -52,7 +52,7 @@ export function StepResume({ onComplete }: { onComplete: () => void }) {
           <div className="flex items-center justify-center gap-3">
             <CheckCircle className="h-5 w-5 text-green-400 shrink-0" />
             <div className="text-left">
-              <p className="text-sm text-white font-medium">{file.name}</p>
+              <p className="text-sm text-foreground font-medium">{file.name}</p>
               <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
             </div>
           </div>

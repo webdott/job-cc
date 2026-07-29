@@ -68,7 +68,7 @@ export function AppCard({
             </button>
           )}
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{title}</p>
+            <p className="text-sm font-medium text-foreground truncate">{title}</p>
             <p className="text-xs text-muted-foreground truncate">{company}</p>
           </div>
         </div>
@@ -76,7 +76,7 @@ export function AppCard({
           {isInactive && (
             <span
               className={cn(
-                "text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white",
+                "text-[10px] font-medium px-1.5 py-0.5 rounded-full text-foreground",
                 INACTIVE_STAGES.find((s) => s.key === app.stage)?.color
               )}
             >
@@ -86,14 +86,16 @@ export function AppCard({
           <ScoreBadge score={score} />
         </div>
       </div>
-      <div className="flex items-center justify-between mt-2">
-        <div className="flex items-center gap-2">
-          {app.job?.location && (
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-              <MapPin className="h-2.5 w-2.5" />
-              {app.job.location}
-            </span>
-          )}
+      <div className="flex items-center gap-2 flex-wrap mt-2">
+        {app.job?.location && (
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+            <MapPin className="h-2.5 w-2.5 whitespace-nowrap" />
+            {app.job.location}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
           {app.job?.remote && (
             <span className="flex items-center gap-1 text-[10px] text-blue-400">
               <Wifi className="h-2.5 w-2.5" />

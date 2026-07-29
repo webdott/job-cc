@@ -28,15 +28,44 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Pinned: Clerk's CDN now defaults unpinned installs to clerk-js v6, which
-  // throws "Clerk was not loaded with Ui components" when rendering our
-  // custom /sign-in page's <SignIn/> — the installed @clerk/nextjs@6.39.5
-  // doesn't yet load the companion @clerk/ui bundle v6 split out. Confirmed
-  // by forcing clerkJSVersion="6" locally and reproducing the same error.
-  // Remove this pin once @clerk/nextjs is upgraded to a release that
-  // supports v6 and the whole auth flow is retested.
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: "hsl(217 91% 60%)",
+          colorBackground: "hsl(var(--card))",
+          colorText: "hsl(var(--foreground))",
+          colorTextSecondary: "hsl(var(--muted-foreground))",
+          colorInputBackground: "hsl(var(--background))",
+          colorInputText: "hsl(var(--foreground))",
+          colorDanger: "hsl(var(--destructive))",
+          borderRadius: "var(--radius)",
+          fontFamily: "var(--font-inter), sans-serif",
+        },
+        elements: {
+          card: "bg-card border border-border dark:border-white/10 rounded-2xl shadow-lg",
+          headerTitle: "text-foreground",
+          headerSubtitle: "text-muted-foreground",
+          socialButtonsBlockButton:
+            "border-border bg-background hover:bg-muted text-foreground dark:bg-white/5 dark:border-white/15 dark:hover:bg-white/10",
+          socialButtonsBlockButtonText: "text-foreground",
+          dividerLine: "bg-border dark:bg-white/15",
+          dividerText: "text-muted-foreground",
+          formFieldLabel: "text-foreground",
+          formFieldInput:
+            "bg-background border-border text-foreground dark:bg-white/5 dark:border-white/15",
+          formButtonPrimary: "bg-accent hover:bg-accent-hover text-white",
+          footerActionText: "text-muted-foreground",
+          footerActionLink: "text-accent hover:text-accent-hover",
+          identityPreviewText: "text-foreground",
+          identityPreviewEditButton: "text-accent hover:text-accent-hover",
+          formResendCodeLink: "text-accent hover:text-accent-hover",
+          otpCodeFieldInput:
+            "bg-background border-border text-foreground dark:bg-white/5 dark:border-white/15",
+          badge: "bg-muted text-muted-foreground dark:bg-white/10",
+        },
+      }}
+    >
       <html lang="en" suppressHydrationWarning>
         <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
           <Providers>{children}</Providers>

@@ -7,6 +7,7 @@ import { StepConnect } from "./components/step-connect";
 import { StepResume } from "./components/step-resume";
 import { StepPreferences } from "./components/step-preferences";
 import { StepNotifications } from "./components/step-notifications";
+import { SignOutButton } from "@/components/sign-out-button";
 
 export default function OnboardingPage() {
   const { step, setStep, needsByocSetup } = useOnboarding();
@@ -20,7 +21,8 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+    <div className="relative min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <SignOutButton className="absolute top-4 right-4" />
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">

@@ -38,7 +38,7 @@ export function StepNotifications() {
       <div className="w-14 h-14 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
         <Bell className="h-7 w-7 text-blue-400" />
       </div>
-      <h2 className="text-lg font-semibold text-white mb-2">Stay in the loop</h2>
+      <h2 className="text-lg font-semibold text-foreground mb-2">Stay in the loop</h2>
       <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
         Get a daily digest of your top job matches, follow-up reminders, and interview alerts — all
         pushed straight to your device.

@@ -5,24 +5,24 @@
 @layer base {
   /* Light mode — default */
   :root {
-    --background: 0 0% 98%;
+    --background: 35 30% 94%;
     --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
+    --card: 38 40% 99%;
     --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
+    --popover: 38 40% 99%;
     --popover-foreground: 222 47% 11%;
     --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 94%;
+    --secondary: 30 25% 88%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 94%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 30 25% 88%;
+    --muted-foreground: 25 15% 36%;
     --accent: 217 91% 60%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 88%;
-    --input: 214 32% 88%;
+    --border: 28 30% 78%;
+    --input: 28 30% 78%;
     --ring: 217 91% 60%;
     --radius: 0.5rem;
 

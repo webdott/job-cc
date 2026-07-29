@@ -55,7 +55,7 @@ export function KanbanColumn({
         ref={setNodeRef}
         className={cn(
           "flex-1 min-h-[400px] rounded-xl p-2 space-y-2 transition-colors",
-          isOver ? "bg-muted/80 ring-1 ring-blue-500/30" : "bg-card/50"
+          isOver ? "bg-muted/50 ring-1 ring-blue-500/30" : "bg-muted/15 dark:bg-card/30"
         )}
       >
         <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
