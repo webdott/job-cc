@@ -72,7 +72,7 @@ function DiscoverPageContent() {
             await scanMutation.mutateAsync().catch(() => {});
           }}
         >
-          <div className="p-4 pb-[calc(6rem+theme(spacing.safe-bottom))] md:p-6 md:pb-6 max-w-3xl mx-auto">
+          <div className="p-4 pb-[calc(3rem+theme(spacing.safe-bottom))] md:p-6 md:pb-6 max-w-3xl mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
