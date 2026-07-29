@@ -59,18 +59,18 @@ export default function PipelinePage() {
       {/* Left: Kanban */}
       <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 border-b border-border flex items-end justify-between shrink-0 flex-wrap gap-4">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Pipeline</h1>
             <p className="text-muted-foreground text-sm">
               {totalActive} active · {responseRate}% response rate
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {inactiveApps.length > 0 && (
               <button
                 onClick={() => setShowInactive((v) => !v)}
-                className="flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+                className="whitespace-nowrap flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Archive className="h-4 w-4" />
                 Inactive ({inactiveApps.length})
@@ -86,7 +86,7 @@ export default function PipelinePage() {
                 onClick={() =>
                   downloadCsv(checkedIds.size > 0 ? apps.filter((a) => checkedIds.has(a.id)) : apps)
                 }
-                className="flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+                className="whitespace-nowrap flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Download className="h-4 w-4" />
                 Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
@@ -94,7 +94,7 @@ export default function PipelinePage() {
             )}
             <button
               onClick={() => setManagingStages(true)}
-              className="flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+              className="whitespace-nowrap flex items-center gap-1.5 text-sm bg-muted border border-border hover:border-blue-500/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
             >
               <Settings2 className="h-4 w-4" />
               Manage stages

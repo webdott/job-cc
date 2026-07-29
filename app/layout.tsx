@@ -43,23 +43,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           fontFamily: "var(--font-inter), sans-serif",
         },
         elements: {
-          card: "bg-card border border-border rounded-2xl shadow-lg",
+          card: "bg-card border border-border dark:border-white/10 rounded-2xl shadow-lg",
           headerTitle: "text-foreground",
           headerSubtitle: "text-muted-foreground",
-          socialButtonsBlockButton: "border-border bg-background hover:bg-muted text-foreground",
+          socialButtonsBlockButton:
+            "border-border bg-background hover:bg-muted text-foreground dark:bg-white/5 dark:border-white/15 dark:hover:bg-white/10",
           socialButtonsBlockButtonText: "text-foreground",
-          dividerLine: "bg-border",
+          dividerLine: "bg-border dark:bg-white/15",
           dividerText: "text-muted-foreground",
           formFieldLabel: "text-foreground",
-          formFieldInput: "bg-background border-border text-foreground",
-          formButtonPrimary: "bg-accent hover:bg-accent-hover text-white border-border",
+          formFieldInput:
+            "bg-background border-border text-foreground dark:bg-white/5 dark:border-white/15",
+          formButtonPrimary: "bg-accent hover:bg-accent-hover text-white",
           footerActionText: "text-muted-foreground",
           footerActionLink: "text-accent hover:text-accent-hover",
           identityPreviewText: "text-foreground",
           identityPreviewEditButton: "text-accent hover:text-accent-hover",
           formResendCodeLink: "text-accent hover:text-accent-hover",
-          otpCodeFieldInput: "bg-background border-border text-foreground",
-          badge: "bg-muted text-muted-foreground",
+          otpCodeFieldInput:
+            "bg-background border-border text-foreground dark:bg-white/5 dark:border-white/15",
+          badge: "bg-muted text-muted-foreground dark:bg-white/10",
         },
       }}
     >

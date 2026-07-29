@@ -70,10 +70,10 @@ function ScoreBadge({
   if (score === null) return <span className="text-xs text-muted-foreground/60">Unscored</span>;
   const color =
     score >= 70
-      ? "bg-green-500/15 text-green-400 border-green-500/20"
+      ? "bg-green-600/15 text-green-700 border-green-600/20 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/20"
       : score >= 40
-        ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/20"
-        : "bg-red-500/15 text-red-400 border-red-500/20";
+        ? "bg-yellow-600/15 text-yellow-700 border-yellow-600/20 dark:bg-yellow-500/15 dark:text-yellow-400 dark:border-yellow-500/20"
+        : "bg-red-600/15 text-red-700 border-red-600/20 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20";
   return (
     <span className={cn("px-2.5 py-1 rounded-full text-sm font-semibold border", color)}>
       {score}%{recommendation ? ` · ${recommendation}` : ""}

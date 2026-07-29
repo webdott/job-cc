@@ -23,7 +23,7 @@ export function StepPreferences({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-white mb-1">Job preferences</h2>
+      <h2 className="text-lg font-semibold text-foreground mb-1">Job preferences</h2>
       <p className="text-muted-foreground text-sm mb-6">Tell us what you&apos;re looking for.</p>
 
       <div className="space-y-5">
