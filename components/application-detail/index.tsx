@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { X, ExternalLink, FileText, MessageSquare, Briefcase } from "lucide-react";
+import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
 import type { Application } from "./types";
 import { ScoreBadge } from "./shared";
 import { OverviewTab } from "./overview-tab";
@@ -55,6 +56,8 @@ export function ApplicationDetail({ applicationId, onClose }: ApplicationDetailP
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  const isMobile = useIsMobileViewport();
+
   if (!applicationId) return null;
 
   const app = appData ?? data?.application ?? null;
@@ -69,17 +72,18 @@ export function ApplicationDetail({ applicationId, onClose }: ApplicationDetailP
         onClick={onClose}
       />
 
-      {/* Panel */}
+      {/* Panel — slides up from the bottom on mobile (bottom sheet), in from
+          the right on desktop (side panel), matching each layout's own CSS positioning above. */}
       <motion.div
-        initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 40 }}
+        initial={isMobile ? { opacity: 1, y: "100%" } : { opacity: 0, x: 40 }}
+        animate={{ opacity: 1, x: 0, y: 0 }}
+        exit={isMobile ? { opacity: 1, y: "100%" } : { opacity: 0, x: 40 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn(
-          // Mobile: bottom sheet
-          "fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[90vh] flex flex-col",
-          // Desktop: right side panel
-          "md:relative md:bottom-auto md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
+          // Mobile: bottom sheet — stop above the bottom tab bar (h-16)
+          "fixed bottom-16 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col",
+          // Desktop: right side panel — full height, no offset needed
+          "md:bottom-0 md:relative md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
         )}
       >
         {/* Header */}

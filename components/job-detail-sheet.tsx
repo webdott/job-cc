@@ -15,22 +15,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { useState } from "react";
-
-// Mirrors the `md:` breakpoint (768px) the panel's own layout classes use —
-// keeps the slide direction in sync with whether it's rendered as a bottom
-// sheet (mobile) or a right-side panel (desktop).
-function useIsMobileViewport() {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  return isMobile;
-}
+import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
 
 interface JobEvaluation {
   overallScore: number | null;
