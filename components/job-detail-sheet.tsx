@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
+import { JobDescription } from "@/components/application-detail/shared";
 
 interface JobEvaluation {
   overallScore: number | null;
@@ -63,33 +64,6 @@ function ScoreBadge({
     <span className={cn("px-2.5 py-1 rounded-full text-sm font-semibold border", color)}>
       {score}%{recommendation ? ` · ${recommendation}` : ""}
     </span>
-  );
-}
-
-/**
- * Renders a job description safely.
- * If the stored content contains HTML tags (from Remotive), it was already
- * server-sanitized via sanitize-html before being stored in the DB.
- * We render it with dangerouslySetInnerHTML and apply prose styles.
- * Plain-text sources (HN, Arbeitnow) are rendered as-is.
- */
-function JobDescription({ text }: { text: string }) {
-  const isHtml = /<[a-z][\s\S]*>/i.test(text);
-
-  if (isHtml) {
-    return (
-      <div
-        className="text-xs text-muted-foreground leading-relaxed job-description-prose"
-        // Content was sanitized server-side by sanitize-html before DB storage.
-        // Only safe tags (p, ul, ol, li, strong, em, h1-h4, a) are allowed.
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: text }}
-      />
-    );
-  }
-
-  return (
-    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{text}</p>
   );
 }
 
