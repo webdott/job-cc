@@ -71,9 +71,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
-        <header className="h-14 flex items-center justify-end gap-1 px-4 md:px-6 border-b border-border shrink-0">
-          <NotificationBell />
-          <SignOutButton />
+        <header className="h-14 flex items-center justify-between gap-1 px-4 md:px-6 border-b border-border shrink-0">
+          <span className="md:hidden text-lg font-semibold tracking-tight">
+            Job<span className="text-blue-500">CC</span>
+          </span>
+          <div className="flex items-center gap-1 ml-auto">
+            <NotificationBell />
+            <SignOutButton />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto pb-[calc(3rem+theme(spacing.safe-bottom))] md:pb-0">
