@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import type { Application, Contact } from "./types";
-import { ScoreBadge, timeAgo } from "./shared";
+import { JobDescription, ScoreBadge, timeAgo } from "./shared";
 import { useOverviewTab } from "./use-overview-tab";
 
 const RichTextEditor = dynamic(
@@ -97,10 +97,8 @@ export function OverviewTab({
             <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
             Job Description
           </summary>
-          <div className="mt-2 bg-muted/40 border border-border rounded-xl p-4">
-            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap line-clamp-[20]">
-              {app.job.description}
-            </p>
+          <div className="mt-2 bg-muted/40 border border-border rounded-xl p-4 max-h-96 overflow-y-auto">
+            <JobDescription text={app.job.description} />
           </div>
         </details>
       )}

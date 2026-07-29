@@ -15,22 +15,8 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { useState } from "react";
-
-// Mirrors the `md:` breakpoint (768px) the panel's own layout classes use —
-// keeps the slide direction in sync with whether it's rendered as a bottom
-// sheet (mobile) or a right-side panel (desktop).
-function useIsMobileViewport() {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  return isMobile;
-}
+import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
+import { JobDescription } from "@/components/application-detail/shared";
 
 interface JobEvaluation {
   overallScore: number | null;
@@ -78,33 +64,6 @@ function ScoreBadge({
     <span className={cn("px-2.5 py-1 rounded-full text-sm font-semibold border", color)}>
       {score}%{recommendation ? ` · ${recommendation}` : ""}
     </span>
-  );
-}
-
-/**
- * Renders a job description safely.
- * If the stored content contains HTML tags (from Remotive), it was already
- * server-sanitized via sanitize-html before being stored in the DB.
- * We render it with dangerouslySetInnerHTML and apply prose styles.
- * Plain-text sources (HN, Arbeitnow) are rendered as-is.
- */
-function JobDescription({ text }: { text: string }) {
-  const isHtml = /<[a-z][\s\S]*>/i.test(text);
-
-  if (isHtml) {
-    return (
-      <div
-        className="text-xs text-muted-foreground leading-relaxed job-description-prose"
-        // Content was sanitized server-side by sanitize-html before DB storage.
-        // Only safe tags (p, ul, ol, li, strong, em, h1-h4, a) are allowed.
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: text }}
-      />
-    );
-  }
-
-  return (
-    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{text}</p>
   );
 }
 
