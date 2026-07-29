@@ -182,7 +182,7 @@ export default function PipelinePage() {
         ) : (
           <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <PullToRefresh className="flex-1" onRefresh={handlePullRefresh}>
-              <div className="flex gap-4 p-6 pb-24 md:pb-6 overflow-x-auto">
+              <div className="flex gap-4 p-6 pb-[calc(6rem+theme(spacing.safe-bottom))] md:pb-6 overflow-x-auto">
                 {stages.map((stage) => (
                   <KanbanColumn
                     key={stage.id}

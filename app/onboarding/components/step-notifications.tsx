@@ -1,36 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
+import { enablePushNotifications } from "@/lib/push-client";
 
 export function StepNotifications() {
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [enabling, setEnabling] = useState(false);
 
   async function handleEnableNotifications() {
+    setEnabling(true);
+    setError(null);
     try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        router.push("/");
-        return;
-      }
-
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-      });
-
-      const json = sub.toJSON();
-      await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-      });
-    } catch (error) {
-      // Fail silently — notifications are optional
-      console.error("Failed to enable notifications", error);
+      await enablePushNotifications();
+      router.push("/");
+    } catch (err) {
+      // Notifications are optional — let the user retry or skip rather than
+      // silently redirecting past an error they'd want to know about.
+      setEnabling(false);
+      setError(err instanceof Error ? err.message : "Failed to enable notifications.");
     }
-    router.push("/");
   }
 
   return (
@@ -57,11 +48,14 @@ export function StepNotifications() {
         ))}
       </ul>
 
+      {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+
       <button
         onClick={handleEnableNotifications}
-        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-lg transition-colors mb-3"
+        disabled={enabling}
+        className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg transition-colors mb-3"
       >
-        Enable notifications
+        {enabling ? "Enabling…" : "Enable notifications"}
       </button>
       <button
         onClick={() => router.push("/")}

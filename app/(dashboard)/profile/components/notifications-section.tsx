@@ -1,40 +1,50 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Bell, CheckCircle, Loader2 } from "lucide-react";
+import { enablePushNotifications } from "@/lib/push-client";
 import { Section } from "./section";
 import { useNotificationPreferences } from "./use-notification-preferences";
 
 export function NotificationsSection() {
   const { notifPrefs, setNotifPrefs, saved, mutation } = useNotificationPreferences();
+  const [pushStatus, setPushStatus] = useState<"idle" | "enabling" | "enabled">("idle");
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  async function handleEnablePush() {
+    setPushStatus("enabling");
+    setPushError(null);
+    try {
+      await enablePushNotifications();
+      setPushStatus("enabled");
+    } catch (error) {
+      setPushStatus("idle");
+      setPushError(error instanceof Error ? error.message : "Failed to enable notifications.");
+    }
+  }
 
   return (
     <Section title="Notifications">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <Bell className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-foreground/80">Push notifications</span>
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-foreground/80">Push notifications</span>
+          </div>
+          <button
+            onClick={handleEnablePush}
+            disabled={pushStatus !== "idle"}
+            className="text-xs text-blue-400 hover:text-blue-300 disabled:text-muted-foreground transition-colors"
+          >
+            {pushStatus === "enabling"
+              ? "Enabling…"
+              : pushStatus === "enabled"
+                ? "Enabled"
+                : "Enable"}
+          </button>
         </div>
-        <button
-          onClick={async () => {
-            const permission = await Notification.requestPermission();
-            if (permission !== "granted") return;
-            const reg = await navigator.serviceWorker.ready;
-            const sub = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-            });
-            const json = sub.toJSON();
-            await fetch("/api/push/subscribe", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-            });
-          }}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          Enable
-        </button>
+        {pushError && <p className="text-xs text-red-400 mt-2">{pushError}</p>}
       </div>
 
       <div className="space-y-3 pt-3 border-t border-border">
