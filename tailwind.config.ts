@@ -59,6 +59,7 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       spacing: {
+        "safe-top": "env(safe-area-inset-top)",
         "safe-bottom": "env(safe-area-inset-bottom)",
       },
     },

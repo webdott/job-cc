@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Job Command Center">
   <rect width="512" height="512" fill="#0F172A"/>
-  <!-- Three bars: short / tall / medium -->
-  <rect x="112" y="280" width="72" height="128" rx="36" fill="#3B82F6"/>
-  <rect x="220" y="144" width="72" height="264" rx="36" fill="#3B82F6"/>
-  <rect x="328" y="208" width="72" height="200" rx="36" fill="#3B82F6"/>
+  <!-- Flat-bottom bars with rounded tops: short / tall / medium -->
+  <path fill="#3B82F6" d="M112 408V316c0-19.882 16.118-36 36-36s36 16.118 36 36v92z"/>
+  <path fill="#3B82F6" d="M220 408V180c0-19.882 16.118-36 36-36s36 16.118 36 36v228z"/>
+  <path fill="#3B82F6" d="M328 408V244c0-19.882 16.118-36 36-36s36 16.118 36 36v164z"/>
 </svg>
