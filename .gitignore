@@ -44,7 +44,10 @@ next-env.d.ts
 
 # next-pwa generated files
 public/sw.js
+public/sw.js.map
 public/workbox-*.js
+public/worker-*.js
+public/worker-*.js.map
 
 # misc
 /docs
