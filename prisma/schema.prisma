@@ -45,7 +45,7 @@ model User {
 
 // Encrypted BYOC credentials for non-allowlisted users (see lib/byoc.ts).
 // Allowlisted users never have a row here — they use the operator's own
-// env-configured Gemini/Anthropic + R2 credentials.
+// env-configured Gemini/Anthropic + R2 + Brevo credentials.
 model UserCredentials {
   id                   String     @id @default(cuid())
   userId               String     @unique
@@ -57,6 +57,9 @@ model UserCredentials {
   r2SecretAccessKeyEnc String
   r2BucketNameEnc      String
   r2PublicUrlEnc       String
+  // Nullable so existing BYOC rows remain valid until the user re-saves.
+  brevoApiKeyEnc       String?
+  brevoFromEmailEnc    String?
   verifiedAt           DateTime
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt

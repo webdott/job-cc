@@ -43,7 +43,7 @@ Pre-commit (husky) runs `npm run typecheck` then `lint-staged` (eslint --fix + p
 
 **Cron jobs**: scheduled in `vercel.json` — daily digest at 09:00 UTC (`app/api/cron/daily-digest`) and follow-up reminder check at 08:00 UTC (`app/api/cron/reminders`). Both are protected by `CRON_SECRET` and only invokable by Vercel's cron scheduler / matching bearer token, not by end users.
 
-**Push notifications**: web-push VAPID keys; subscriptions are stored per-user in the `PushSubscription` table (not just `User.pushSubscription`, which appears to be a legacy/simpler single-subscription field — check both when touching push code).
+**Notifications**: primary delivery is **email via Brevo** (`lib/email.ts`) plus **in-app** `Notification` rows (bell UI). Optional **web-push** (VAPID / `PushSubscription`) is best-effort. `notifyUser` in `lib/notifications.ts` gates on preference toggles; quiet hours skip push only. Allowlisted users use `BREVO_API_KEY` + `BREVO_FROM_EMAIL`; BYOC users supply Brevo API key + verified sender (encrypted on `UserCredentials`). Legacy `User.pushSubscription` Json field is unused by the send path.
 
 **PWA**: `next-pwa` (Workbox) is configured in `next.config.mjs` and disabled in development. Note the runtime caching rule explicitly excludes `/api/scan` and `/api/push/` from the generic `NetworkFirst` API cache — don't add caching to those without re-checking why they were excluded.
 
@@ -53,4 +53,4 @@ Pre-commit (husky) runs `npm run typecheck` then `lint-staged` (eslint --fix + p
 
 ## Environment
 
-See `.env.example` for the full list. Notable non-obvious ones: `DIRECT_URL` vs `DATABASE_URL` (session vs transaction pooling mode — both required), `CRON_SECRET` (must match between Vercel env and the deployed value, arbitrary string), `GOOGLE_GENERATIVE_AI_KEY` (Gemini, from AI Studio, not Google Cloud).
+See `.env.example` for the full list. Notable non-obvious ones: `DIRECT_URL` vs `DATABASE_URL` (session vs transaction pooling mode — both required), `CRON_SECRET` (must match between Vercel env and the deployed value, arbitrary string), `GOOGLE_GENERATIVE_AI_API_KEY` (Gemini, from AI Studio, not Google Cloud), `BREVO_API_KEY` + `BREVO_FROM_EMAIL` (email notifications for allowlisted users).

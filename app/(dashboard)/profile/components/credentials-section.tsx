@@ -13,7 +13,7 @@ export function CredentialsSection() {
   if (isAllowlisted) return null;
 
   return (
-    <Section title="AI & Storage Credentials">
+    <Section title="AI, Storage & Email Credentials">
       {credStatus?.hasCredentials && !byocMutation.isPending && (
         <div className="flex items-center gap-2 mb-4 text-sm text-green-400 bg-green-500/10 px-3 py-2 rounded-lg">
           <CheckCircle className="h-4 w-4 shrink-0" />
@@ -120,6 +120,57 @@ export function CredentialsSection() {
           </div>
         </div>
 
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-medium text-foreground/80">
+              Brevo (email notifications)
+            </label>
+            <a
+              href="https://help.brevo.com/hc/en-us/articles/209467485-Create-and-manage-your-API-keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap"
+            >
+              Get a free API key <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          <p className="text-xs text-muted-foreground mb-2">
+            Use the verified sender from your Brevo account (usually the email you signed up with).
+            It must show as Verified under Senders, domains &amp; IPs.
+          </p>
+          <div
+            className={cn(
+              "space-y-2 rounded-lg",
+              byocFieldError === "brevo" && "ring-1 ring-red-500/60 p-2 -m-2"
+            )}
+          >
+            <input
+              type="password"
+              placeholder="API key"
+              value={byoc.brevoApiKey}
+              onChange={(e) => setByoc((b) => ({ ...b, brevoApiKey: e.target.value }))}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <input
+                type="email"
+                placeholder="Verified sender email (from)"
+                value={byoc.brevoFromEmail}
+                onChange={(e) => setByoc((b) => ({ ...b, brevoFromEmail: e.target.value }))}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
+              />
+              <a
+                href="https://app.brevo.com/senders/domain/ips"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors whitespace-nowrap shrink-0"
+              >
+                Manage senders <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+
         {byocMutation.isError && (
           <p className="text-red-400 text-sm">{byocMutation.error.message}</p>
         )}
@@ -133,7 +184,9 @@ export function CredentialsSection() {
             !byoc.r2AccessKeyId ||
             !byoc.r2SecretAccessKey ||
             !byoc.r2BucketName ||
-            !byoc.r2PublicUrl
+            !byoc.r2PublicUrl ||
+            !byoc.brevoApiKey ||
+            !byoc.brevoFromEmail
           }
           className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
         >

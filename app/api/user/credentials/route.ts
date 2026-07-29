@@ -7,6 +7,7 @@ import { parseBody } from "@/lib/validation";
 import { encrypt } from "@/lib/crypto";
 import { buildModelsForProvider } from "@/lib/ai";
 import { createR2Client } from "@/lib/r2";
+import { verifyBrevoCredentials } from "@/lib/email";
 import { AI_PROVIDERS } from "@/lib/ai-providers";
 
 const CredentialsSchema = z.object({
@@ -17,6 +18,8 @@ const CredentialsSchema = z.object({
   r2SecretAccessKey: z.string().min(1).max(200),
   r2BucketName: z.string().min(1).max(200),
   r2PublicUrl: z.string().url(),
+  brevoApiKey: z.string().min(10).max(300),
+  brevoFromEmail: z.string().email(),
 });
 
 function statusCodeFromError(err: unknown): number | undefined {
@@ -58,8 +61,8 @@ export async function GET() {
   });
 }
 
-// POST /api/user/credentials — validates + test-verifies both the AI key and
-// R2 credentials with real calls before saving, and encrypts everything at rest.
+// POST /api/user/credentials — validates + test-verifies AI, R2, and Brevo
+// credentials with real calls before saving, and encrypts everything at rest.
 export async function POST(req: NextRequest) {
   const { userId: clerkId } = await auth();
   if (!clerkId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -71,6 +74,8 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   const aiApiKey = data.aiApiKey.trim();
+  const brevoApiKey = data.brevoApiKey.trim();
+  const brevoFromEmail = data.brevoFromEmail.trim();
 
   try {
     const { flashModel } = buildModelsForProvider(data.aiProvider, aiApiKey);
@@ -115,6 +120,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  try {
+    await verifyBrevoCredentials(brevoApiKey, brevoFromEmail);
+  } catch (err) {
+    console.error("[credentials] Brevo verification failed:", err);
+    return NextResponse.json(
+      {
+        error:
+          "Couldn't verify Brevo — check your API key and that the sender email is verified in Brevo.",
+        field: "brevo",
+      },
+      { status: 400 }
+    );
+  }
+
   const encrypted = {
     aiProvider: data.aiProvider,
     aiApiKeyEnc: encrypt(aiApiKey),
@@ -123,6 +142,8 @@ export async function POST(req: NextRequest) {
     r2SecretAccessKeyEnc: encrypt(data.r2SecretAccessKey),
     r2BucketNameEnc: encrypt(data.r2BucketName),
     r2PublicUrlEnc: encrypt(data.r2PublicUrl),
+    brevoApiKeyEnc: encrypt(brevoApiKey),
+    brevoFromEmailEnc: encrypt(brevoFromEmail),
     verifiedAt: new Date(),
   };
 

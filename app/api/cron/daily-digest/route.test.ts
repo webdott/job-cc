@@ -38,7 +38,7 @@ beforeEach(async () => {
   await resetTestDb();
   mockScoreJob.mockReset();
   mockNotifyUser.mockReset();
-  mockNotifyUser.mockResolvedValue({ created: true, pushed: 1 });
+  mockNotifyUser.mockResolvedValue({ created: true, pushed: 1, emailed: true });
 });
 
 afterEach(() => {

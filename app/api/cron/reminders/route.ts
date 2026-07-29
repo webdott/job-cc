@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyUser } from "@/lib/notifications";
+import { resolveUserCredentials } from "@/lib/byoc";
 
 // ── Stages that should not receive follow-up reminders ───────────────────────
 
@@ -45,7 +46,9 @@ export async function GET(req: NextRequest) {
 
     const body = `Follow up on ${role} at ${company} — no response yet`;
 
-    const { pushed } = await notifyUser({
+    const credentials = await resolveUserCredentials(app.user.email, app.user.id);
+
+    const { pushed, emailed } = await notifyUser({
       userId: app.user.id,
       type: "follow_up_reminder",
       title: "Follow-up Reminder",
@@ -53,8 +56,10 @@ export async function GET(req: NextRequest) {
       url: "/pipeline",
       preferences: app.user.preferences,
       subscriptions: app.user.pushSubscriptions,
+      userEmail: app.user.email,
+      emailCredentials: credentials?.email ?? null,
     });
-    sent += pushed;
+    sent += Math.max(pushed, emailed ? 1 : 0);
 
     // Clear followUpAt regardless of whether a notification was sent
     await prisma.application.update({

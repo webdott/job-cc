@@ -24,7 +24,7 @@ export function useCredentialsSection() {
   });
 
   const [byoc, setByoc] = useState<ByocForm>(EMPTY_BYOC_FORM);
-  const [byocFieldError, setByocFieldError] = useState<"ai" | "r2" | null>(null);
+  const [byocFieldError, setByocFieldError] = useState<"ai" | "r2" | "brevo" | null>(null);
   const [byocSaved, setByocSaved] = useState(false);
 
   const byocMutation = useMutation({
@@ -37,7 +37,7 @@ export function useCredentialsSection() {
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
-          field?: "ai" | "r2";
+          field?: "ai" | "r2" | "brevo";
         };
         setByocFieldError(data.field ?? null);
         throw new Error(data.error ?? "Failed to save credentials");

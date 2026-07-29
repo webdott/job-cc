@@ -18,7 +18,7 @@ function cronRequest(bearer?: string) {
 beforeEach(async () => {
   await resetTestDb();
   mockNotifyUser.mockReset();
-  mockNotifyUser.mockResolvedValue({ created: true, pushed: 1 });
+  mockNotifyUser.mockResolvedValue({ created: true, pushed: 1, emailed: true });
 });
 
 describe("GET /api/cron/reminders", () => {

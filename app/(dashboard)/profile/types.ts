@@ -74,6 +74,8 @@ export interface ByocForm {
   r2SecretAccessKey: string;
   r2BucketName: string;
   r2PublicUrl: string;
+  brevoApiKey: string;
+  brevoFromEmail: string;
 }
 
 export const EMPTY_BYOC_FORM: ByocForm = {
@@ -84,4 +86,6 @@ export const EMPTY_BYOC_FORM: ByocForm = {
   r2SecretAccessKey: "",
   r2BucketName: "",
   r2PublicUrl: "",
+  brevoApiKey: "",
+  brevoFromEmail: "",
 };

@@ -7,10 +7,11 @@ import { GET, POST } from "./route";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 
-const { generateTextMock, uploadFileMock, deleteFileMock } = vi.hoisted(() => ({
+const { generateTextMock, uploadFileMock, deleteFileMock, verifyBrevoMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
   uploadFileMock: vi.fn(),
   deleteFileMock: vi.fn(),
+  verifyBrevoMock: vi.fn(),
 }));
 vi.mock("ai", () => ({ generateText: generateTextMock }));
 vi.mock("@/lib/r2", () => ({
@@ -19,6 +20,9 @@ vi.mock("@/lib/r2", () => ({
     uploadFile: uploadFileMock,
     deleteFile: deleteFileMock,
   }),
+}));
+vi.mock("@/lib/email", () => ({
+  verifyBrevoCredentials: verifyBrevoMock,
 }));
 
 const mockAuth = auth as unknown as ReturnType<typeof vi.fn>;
@@ -31,6 +35,8 @@ const validBody = {
   r2SecretAccessKey: "secret",
   r2BucketName: "bucket",
   r2PublicUrl: "https://pub.example.com",
+  brevoApiKey: "xkeysib-fake-brevo-key-for-testing",
+  brevoFromEmail: "sender@example.com",
 };
 
 function credentialsRequest(body: unknown) {
@@ -43,9 +49,11 @@ beforeEach(async () => {
   generateTextMock.mockReset();
   uploadFileMock.mockReset();
   deleteFileMock.mockReset();
+  verifyBrevoMock.mockReset();
   generateTextMock.mockResolvedValue({ text: "pong" });
   uploadFileMock.mockResolvedValue("https://mock.example.com/key");
   deleteFileMock.mockResolvedValue(undefined);
+  verifyBrevoMock.mockResolvedValue(undefined);
 });
 
 describe("GET /api/user/credentials", () => {
@@ -139,6 +147,18 @@ describe("POST /api/user/credentials", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.field).toBe("r2");
+    expect(verifyBrevoMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a brevo-scoped 400 when Brevo verification fails", async () => {
+    verifyBrevoMock.mockRejectedValueOnce(new Error("bad sender"));
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    const res = await POST(credentialsRequest(validBody));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.field).toBe("brevo");
   });
 
   it("verifies, encrypts, and stores credentials on success", async () => {
@@ -149,11 +169,14 @@ describe("POST /api/user/credentials", () => {
     expect(res.status).toBe(200);
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
     expect(deleteFileMock).toHaveBeenCalledTimes(1);
+    expect(verifyBrevoMock).toHaveBeenCalledWith(validBody.brevoApiKey, validBody.brevoFromEmail);
 
     const stored = await prisma.userCredentials.findUniqueOrThrow({ where: { userId: user.id } });
     expect(stored.aiApiKeyEnc).not.toBe(validBody.aiApiKey);
     expect(stored.aiApiKeyEnc.startsWith("v1.")).toBe(true);
     expect(stored.r2AccountIdEnc).not.toBe(validBody.r2AccountId);
+    expect(stored.brevoApiKeyEnc).not.toBeNull();
+    expect(stored.brevoFromEmailEnc).not.toBeNull();
   });
 
   it("upserts — resubmitting replaces stored credentials instead of erroring", async () => {

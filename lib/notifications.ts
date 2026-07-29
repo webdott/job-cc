@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
+import { sendTransactionalEmail, type EmailCredentials } from "@/lib/email";
 
 webpush.setVapidDetails(
   `mailto:${process.env.VAPID_CONTACT_EMAIL ?? "admin@example.com"}`,
@@ -31,6 +32,8 @@ interface NotifyUserInput {
   url?: string;
   preferences: unknown;
   subscriptions: PushSubscriptionRecord[];
+  userEmail: string;
+  emailCredentials: EmailCredentials | null;
 }
 
 const TOGGLE_KEY: Record<NotificationType, keyof NotificationPrefs> = {
@@ -55,9 +58,18 @@ function inQuietHours(prefs: NotificationPrefs, now: Date): boolean {
     : nowMinutes >= start || nowMinutes < end;
 }
 
+function pushStatusCode(err: unknown): number | undefined {
+  if (err && typeof err === "object" && "statusCode" in err) {
+    const code = (err as { statusCode: unknown }).statusCode;
+    return typeof code === "number" ? code : undefined;
+  }
+  return undefined;
+}
+
 /**
- * Records a notification in the in-app history (respecting the per-type toggle)
- * and pushes it to the user's devices unless it falls inside their quiet hours.
+ * Records a notification in the in-app history (respecting the per-type toggle),
+ * emails via Brevo when credentials are available, and best-effort web-pushes
+ * unless the event falls inside quiet hours.
  */
 export async function notifyUser({
   userId,
@@ -67,14 +79,33 @@ export async function notifyUser({
   url,
   preferences,
   subscriptions,
-}: NotifyUserInput): Promise<{ created: boolean; pushed: number }> {
+  userEmail,
+  emailCredentials,
+}: NotifyUserInput): Promise<{ created: boolean; pushed: number; emailed: boolean }> {
   const prefs = (preferences as { notifications?: NotificationPrefs } | null)?.notifications ?? {};
   const enabled = prefs[TOGGLE_KEY[type]] ?? true;
-  if (!enabled) return { created: false, pushed: 0 };
+  if (!enabled) return { created: false, pushed: 0, emailed: false };
 
   await prisma.notification.create({ data: { userId, type, title, body, url } });
 
-  if (inQuietHours(prefs, new Date())) return { created: true, pushed: 0 };
+  let emailed = false;
+  if (emailCredentials && userEmail) {
+    try {
+      await sendTransactionalEmail({
+        apiKey: emailCredentials.apiKey,
+        fromEmail: emailCredentials.fromEmail,
+        toEmail: userEmail,
+        subject: title,
+        textContent: body,
+        url,
+      });
+      emailed = true;
+    } catch (err) {
+      console.error("[notifyUser] email send failed:", err);
+    }
+  }
+
+  if (inQuietHours(prefs, new Date())) return { created: true, pushed: 0, emailed };
 
   let pushed = 0;
   for (const sub of subscriptions) {
@@ -84,11 +115,16 @@ export async function notifyUser({
         JSON.stringify({ title, body, icon: "/icons/icon-192.png", url })
       );
       pushed++;
-    } catch {
-      // Subscription may be expired — remove it
-      await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+    } catch (err) {
+      const status = pushStatusCode(err);
+      // Only drop clearly expired/invalid subscriptions — not transient failures.
+      if (status === 404 || status === 410) {
+        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+      } else {
+        console.error("[notifyUser] web push failed:", err);
+      }
     }
   }
 
-  return { created: true, pushed };
+  return { created: true, pushed, emailed };
 }
