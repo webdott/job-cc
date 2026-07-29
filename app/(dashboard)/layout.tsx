@@ -71,12 +71,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
-        <header className="h-14 flex items-center justify-end gap-1 px-4 md:px-6 border-b border-border shrink-0">
-          <NotificationBell />
-          <SignOutButton />
+        <header className="h-14 flex items-center justify-between gap-1 px-4 md:px-6 border-b border-border shrink-0">
+          <span className="md:hidden text-lg font-semibold tracking-tight">
+            Job<span className="text-blue-500">CC</span>
+          </span>
+          <div className="flex items-center gap-1 ml-auto">
+            <NotificationBell />
+            <SignOutButton />
+          </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-[calc(5rem+theme(spacing.safe-bottom))] md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-[calc(3rem+theme(spacing.safe-bottom))] md:pb-0">
           {/* Enter-only: AnimatePresence mode="wait" can leave App Router navigations stuck blank */}
           <motion.div
             key={pathname}
@@ -90,7 +95,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
 
         {/* Bottom tab bar — mobile only */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-card border-t border-border z-50 pb-safe-bottom">
+        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-card border-t border-border z-50">
           <div className="flex items-center justify-around h-16 px-2">
             {navItems.map(({ href, label, icon: Icon }) => (
               <Link

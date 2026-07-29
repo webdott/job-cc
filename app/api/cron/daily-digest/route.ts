@@ -156,10 +156,9 @@ export async function GET(req: NextRequest) {
   ]);
   const allJobData = [...remotive, ...arbeitnow, ...hn];
 
-  // Run discovery for every user with an active resume — not just those with
-  // a push subscription, so users who never enabled notifications still get
-  // automatic re-discovery. Notifications are sent afterward, only to users
-  // who have at least one PushSubscription.
+  // Run discovery for every user with an active resume — not just those who
+  // enabled web push. Notifications (email + in-app + optional push) are sent
+  // afterward for users with new matches.
   const users = await prisma.user.findMany({
     where: { resumes: { some: { isActive: true } } },
     include: {
@@ -230,7 +229,7 @@ export async function GET(req: NextRequest) {
       ? `${newJobs.length} new job match${newJobs.length !== 1 ? "es" : ""} — best: ${bestJob.title} at ${bestJob.company} (${Math.round(bestJob.score)}%)`
       : `${newJobs.length} new job match${newJobs.length !== 1 ? "es" : ""} found for you`;
 
-    const { pushed } = await notifyUser({
+    const { pushed, emailed } = await notifyUser({
       userId: user.id,
       type: "job_match",
       title: "Job Command Center",
@@ -238,8 +237,10 @@ export async function GET(req: NextRequest) {
       url: "/discover",
       preferences: user.preferences,
       subscriptions: user.pushSubscriptions,
+      userEmail: user.email,
+      emailCredentials: credentials.email,
     });
-    totalNotificationsSent += pushed;
+    totalNotificationsSent += Math.max(pushed, emailed ? 1 : 0);
   }
 
   return NextResponse.json({

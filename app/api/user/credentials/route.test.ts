@@ -7,10 +7,11 @@ import { GET, POST } from "./route";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 
-const { generateTextMock, uploadFileMock, deleteFileMock } = vi.hoisted(() => ({
+const { generateTextMock, uploadFileMock, deleteFileMock, verifyBrevoMock } = vi.hoisted(() => ({
   generateTextMock: vi.fn(),
   uploadFileMock: vi.fn(),
   deleteFileMock: vi.fn(),
+  verifyBrevoMock: vi.fn(),
 }));
 vi.mock("ai", () => ({ generateText: generateTextMock }));
 vi.mock("@/lib/r2", () => ({
@@ -19,6 +20,9 @@ vi.mock("@/lib/r2", () => ({
     uploadFile: uploadFileMock,
     deleteFile: deleteFileMock,
   }),
+}));
+vi.mock("@/lib/email", () => ({
+  verifyBrevoCredentials: verifyBrevoMock,
 }));
 
 const mockAuth = auth as unknown as ReturnType<typeof vi.fn>;
@@ -31,6 +35,8 @@ const validBody = {
   r2SecretAccessKey: "secret",
   r2BucketName: "bucket",
   r2PublicUrl: "https://pub.example.com",
+  brevoApiKey: "xkeysib-fake-brevo-key-for-testing",
+  brevoFromEmail: "sender@example.com",
 };
 
 function credentialsRequest(body: unknown) {
@@ -43,9 +49,11 @@ beforeEach(async () => {
   generateTextMock.mockReset();
   uploadFileMock.mockReset();
   deleteFileMock.mockReset();
+  verifyBrevoMock.mockReset();
   generateTextMock.mockResolvedValue({ text: "pong" });
   uploadFileMock.mockResolvedValue("https://mock.example.com/key");
   deleteFileMock.mockResolvedValue(undefined);
+  verifyBrevoMock.mockResolvedValue(undefined);
 });
 
 describe("GET /api/user/credentials", () => {
@@ -99,7 +107,35 @@ describe("POST /api/user/credentials", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.field).toBe("ai");
+    expect(body.error).toMatch(/Couldn't verify this API key/);
     expect(uploadFileMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a quota message when verification fails with 429", async () => {
+    generateTextMock.mockRejectedValueOnce(Object.assign(new Error("quota"), { statusCode: 429 }));
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    const res = await POST(credentialsRequest(validBody));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.field).toBe("ai");
+    expect(body.error).toMatch(/rate-limited or out of quota/);
+  });
+
+  it("trims the AI API key and uses a safer ping before storing", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    await POST(credentialsRequest({ ...validBody, aiApiKey: `  ${validBody.aiApiKey}  ` }));
+
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: "ping",
+        maxOutputTokens: 64,
+        providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+      })
+    );
   });
 
   it("returns an r2-scoped 400 when the R2 round trip fails", async () => {
@@ -111,6 +147,18 @@ describe("POST /api/user/credentials", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.field).toBe("r2");
+    expect(verifyBrevoMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a brevo-scoped 400 when Brevo verification fails", async () => {
+    verifyBrevoMock.mockRejectedValueOnce(new Error("bad sender"));
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    const res = await POST(credentialsRequest(validBody));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.field).toBe("brevo");
   });
 
   it("verifies, encrypts, and stores credentials on success", async () => {
@@ -121,11 +169,14 @@ describe("POST /api/user/credentials", () => {
     expect(res.status).toBe(200);
     expect(uploadFileMock).toHaveBeenCalledTimes(1);
     expect(deleteFileMock).toHaveBeenCalledTimes(1);
+    expect(verifyBrevoMock).toHaveBeenCalledWith(validBody.brevoApiKey, validBody.brevoFromEmail);
 
     const stored = await prisma.userCredentials.findUniqueOrThrow({ where: { userId: user.id } });
     expect(stored.aiApiKeyEnc).not.toBe(validBody.aiApiKey);
     expect(stored.aiApiKeyEnc.startsWith("v1.")).toBe(true);
     expect(stored.r2AccountIdEnc).not.toBe(validBody.r2AccountId);
+    expect(stored.brevoApiKeyEnc).not.toBeNull();
+    expect(stored.brevoFromEmailEnc).not.toBeNull();
   });
 
   it("upserts — resubmitting replaces stored credentials instead of erroring", async () => {
@@ -139,5 +190,60 @@ describe("POST /api/user/credentials", () => {
     const stored = await prisma.userCredentials.findUniqueOrThrow({ where: { userId: user.id } });
     expect(stored.aiProvider).toBe("ANTHROPIC");
     expect(await prisma.userCredentials.count({ where: { userId: user.id } })).toBe(1);
+  });
+
+  it("allows updating only the AI key and skips re-verifying R2/Brevo", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await POST(credentialsRequest(validBody));
+
+    generateTextMock.mockClear();
+    uploadFileMock.mockClear();
+    deleteFileMock.mockClear();
+    verifyBrevoMock.mockClear();
+
+    const res = await POST(
+      credentialsRequest({
+        aiProvider: "GOOGLE",
+        aiApiKey: "AIzaReplacementKeyForTesting999",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(uploadFileMock).not.toHaveBeenCalled();
+    expect(verifyBrevoMock).not.toHaveBeenCalled();
+  });
+
+  it("allows updating only Brevo and merges the stored sender when omitted", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await POST(credentialsRequest(validBody));
+
+    generateTextMock.mockClear();
+    uploadFileMock.mockClear();
+    verifyBrevoMock.mockClear();
+
+    const res = await POST(
+      credentialsRequest({
+        brevoApiKey: "xkeysib-replacement-brevo-key-zzz",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(verifyBrevoMock).toHaveBeenCalledWith(
+      "xkeysib-replacement-brevo-key-zzz",
+      validBody.brevoFromEmail
+    );
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(uploadFileMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty update when credentials already exist", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await POST(credentialsRequest(validBody));
+
+    const res = await POST(credentialsRequest({ aiProvider: "GOOGLE" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/at least one new value/i);
   });
 });

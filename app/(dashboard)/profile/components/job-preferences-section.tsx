@@ -85,20 +85,20 @@ export function JobPreferencesSection() {
           <label className="block text-xs font-medium text-muted-foreground mb-1.5">
             Salary range (USD / year)
           </label>
-          <div className="flex gap-3">
+          <div className="flex gap-3 w-full">
             <input
               type="number"
               placeholder="Min"
               value={prefs.salaryMin}
               onChange={(e) => setPrefs((p) => ({ ...p, salaryMin: e.target.value }))}
-              className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
+              className="flex-1 max-w-[48%] bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
             />
             <input
               type="number"
               placeholder="Max"
               value={prefs.salaryMax}
               onChange={(e) => setPrefs((p) => ({ ...p, salaryMax: e.target.value }))}
-              className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
+              className="flex-1 max-w-[48%] bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500"
             />
           </div>
         </div>

@@ -3,7 +3,7 @@ import { EMPTY_BYOC_FORM, type ByocForm } from "../types";
 
 export function useByocStep(onComplete: () => void) {
   const [byoc, setByoc] = useState<ByocForm>(EMPTY_BYOC_FORM);
-  const [byocFieldError, setByocFieldError] = useState<"ai" | "r2" | null>(null);
+  const [byocFieldError, setByocFieldError] = useState<"ai" | "r2" | "brevo" | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,7 +20,7 @@ export function useByocStep(onComplete: () => void) {
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
-          field?: "ai" | "r2";
+          field?: "ai" | "r2" | "brevo";
         };
         setByocFieldError(data.field ?? null);
         throw new Error(data.error ?? "Failed to save credentials");

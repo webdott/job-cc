@@ -112,7 +112,7 @@ export default function AnalyticsPage() {
 
   return (
     <PullToRefresh className="h-full" onRefresh={() => queryClient.invalidateQueries()}>
-      <div className="p-4 pb-[calc(6rem+theme(spacing.safe-bottom))] md:p-6 md:pb-6 max-w-4xl mx-auto">
+      <div className="p-4 pb-[calc(3rem+theme(spacing.safe-bottom))] md:p-6 md:pb-6 max-w-4xl mx-auto">
         <div className="mb-6">
           <h1 className="text-xl font-semibold text-foreground">Analytics</h1>
           <p className="text-muted-foreground text-sm">Your job search performance at a glance</p>
