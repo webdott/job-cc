@@ -16,13 +16,13 @@ export function StepProgress({ step, needsByocSetup }: { step: number; needsByoc
   const steps = stepsFor(needsByocSetup);
 
   return (
-    <div className="flex items-center justify-center mb-8 gap-2">
+    <div className="flex items-center justify-center mb-8 gap-1">
       {steps.map((s, i) => (
-        <div key={s.id} className="flex items-center gap-2">
+        <div key={s.id} className="flex items-center gap-1">
           <div
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors",
-              step === s.id
+              "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors border",
+              s.id === step
                 ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                 : step > s.id
                   ? "bg-green-500/20 text-green-400"
@@ -34,10 +34,17 @@ export function StepProgress({ step, needsByocSetup }: { step: number; needsByoc
             ) : (
               <s.icon className="h-3.5 w-3.5" />
             )}
-            {s.label}
+            <span
+              className={cn("hidden min-[500px]:block", {
+                block: s.id === step,
+                hidden: s.id !== step,
+              })}
+            >
+              {s.label}
+            </span>
           </div>
           {i < steps.length - 1 && (
-            <div className={cn("h-px w-6", step > s.id ? "bg-green-500/40" : "bg-slate-700")} />
+            <div className={cn("h-px w-3", step > s.id ? "bg-green-500/40" : "bg-slate-700")} />
           )}
         </div>
       ))}
