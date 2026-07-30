@@ -50,4 +50,6 @@ export interface CredentialsStatus {
   hasCredentials: boolean;
   aiProvider: AiProviderId | null;
   verifiedAt: string | null;
+  aiFlashModel: string | null;
+  aiProModel: string | null;
 }

@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
-import { generateText } from "ai";
 import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validation";
 import { encrypt, decrypt } from "@/lib/crypto";
-import { buildModelsForProvider } from "@/lib/ai";
 import { createR2Client } from "@/lib/r2";
 import { verifyBrevoCredentials } from "@/lib/email";
 import { AI_PROVIDERS, type AiProviderId } from "@/lib/ai-providers";
+import { isKnownModel, resolveModelIds } from "@/lib/ai-models";
+import { aiKeyVerifyErrorMessage, verifyAiModels } from "@/lib/ai-verify";
 
 const emptyToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
 
 const CredentialsSchema = z.object({
   aiProvider: z.enum(AI_PROVIDERS).optional(),
   aiApiKey: z.preprocess(emptyToUndefined, z.string().min(10).max(300).optional()),
+  aiFlashModel: z.preprocess(emptyToUndefined, z.string().min(1).max(100).optional()),
+  aiProModel: z.preprocess(emptyToUndefined, z.string().min(1).max(100).optional()),
   r2AccountId: z.preprocess(emptyToUndefined, z.string().min(1).max(200).optional()),
   r2AccessKeyId: z.preprocess(emptyToUndefined, z.string().min(1).max(200).optional()),
   r2SecretAccessKey: z.preprocess(emptyToUndefined, z.string().min(1).max(200).optional()),
@@ -23,38 +25,6 @@ const CredentialsSchema = z.object({
   brevoApiKey: z.preprocess(emptyToUndefined, z.string().min(10).max(300).optional()),
   brevoFromEmail: z.preprocess(emptyToUndefined, z.string().email().optional()),
 });
-
-function statusCodeFromError(err: unknown): number | undefined {
-  if (err && typeof err === "object" && "statusCode" in err) {
-    const code = (err as { statusCode: unknown }).statusCode;
-    return typeof code === "number" ? code : undefined;
-  }
-  return undefined;
-}
-
-function aiKeyVerifyErrorMessage(err: unknown): string {
-  const status = statusCodeFromError(err);
-  if (status === 429) {
-    return "This API key is rate-limited or out of quota — check your provider billing and try again.";
-  }
-  return "Couldn't verify this API key — double-check it and try again.";
-}
-
-async function verifyAiKey(provider: AiProviderId, apiKey: string) {
-  const { flashModel } = buildModelsForProvider(provider, apiKey);
-  await generateText({
-    model: flashModel,
-    prompt: "ping",
-    maxOutputTokens: 64,
-    ...(provider === "GOOGLE"
-      ? {
-          providerOptions: {
-            google: { thinkingConfig: { thinkingBudget: 0 } },
-          },
-        }
-      : {}),
-  });
-}
 
 async function verifyR2(
   userId: string,
@@ -82,13 +52,26 @@ export async function GET() {
     include: { credentials: { select: { aiProvider: true, verifiedAt: true } } },
   });
   if (!user) {
-    return NextResponse.json({ hasCredentials: false, aiProvider: null, verifiedAt: null });
+    return NextResponse.json({
+      hasCredentials: false,
+      aiProvider: null,
+      verifiedAt: null,
+      aiFlashModel: null,
+      aiProModel: null,
+    });
   }
+
+  const provider = user.credentials?.aiProvider ?? null;
+  const models = provider
+    ? resolveModelIds(provider, user.aiFlashModel, user.aiProModel)
+    : { flash: null, pro: null };
 
   return NextResponse.json({
     hasCredentials: !!user.credentials,
-    aiProvider: user.credentials?.aiProvider ?? null,
+    aiProvider: provider,
     verifiedAt: user.credentials?.verifiedAt.toISOString() ?? null,
+    aiFlashModel: models.flash,
+    aiProModel: models.pro,
   });
 }
 
@@ -129,9 +112,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const touchModels = !!(data.aiFlashModel || data.aiProModel);
   const touchAi =
     !!data.aiApiKey ||
-    (!!data.aiProvider && (!existing || data.aiProvider !== existing.aiProvider));
+    (!!data.aiProvider && (!existing || data.aiProvider !== existing.aiProvider)) ||
+    touchModels;
   const touchR2 = !!(
     data.r2AccountId ||
     data.r2AccessKeyId ||
@@ -157,6 +142,8 @@ export async function POST(req: NextRequest) {
   let r2PublicUrlEnc = existing?.r2PublicUrlEnc ?? "";
   let brevoApiKeyEnc = existing?.brevoApiKeyEnc ?? null;
   let brevoFromEmailEnc = existing?.brevoFromEmailEnc ?? null;
+  let nextFlash = user.aiFlashModel;
+  let nextPro = user.aiProModel;
 
   if (touchAi) {
     const aiApiKey = data.aiApiKey?.trim() || (existing ? decrypt(existing.aiApiKeyEnc) : "");
@@ -166,17 +153,37 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    aiProvider = data.aiProvider ?? existing!.aiProvider;
+    aiProvider = data.aiProvider ?? existing?.aiProvider ?? "GOOGLE";
+    if (
+      (data.aiFlashModel && !isKnownModel(aiProvider, data.aiFlashModel)) ||
+      (data.aiProModel && !isKnownModel(aiProvider, data.aiProModel))
+    ) {
+      return NextResponse.json(
+        { error: "Unknown model for this provider — pick from the list.", field: "ai" },
+        { status: 400 }
+      );
+    }
+    // Stale IDs after a provider switch fall back to that provider's defaults.
+    const validated = resolveModelIds(
+      aiProvider,
+      data.aiFlashModel ?? user.aiFlashModel,
+      data.aiProModel ?? user.aiProModel
+    );
     try {
-      await verifyAiKey(aiProvider, aiApiKey);
+      await verifyAiModels(aiProvider, aiApiKey, validated.flash, validated.pro);
     } catch (err) {
       console.error("[credentials] AI key verification failed:", err);
       return NextResponse.json(
-        { error: aiKeyVerifyErrorMessage(err), field: "ai" },
+        {
+          error: aiKeyVerifyErrorMessage(err, aiProvider, validated.flash, validated.pro),
+          field: "ai",
+        },
         { status: 400 }
       );
     }
     aiApiKeyEnc = encrypt(aiApiKey);
+    nextFlash = validated.flash;
+    nextPro = validated.pro;
   }
 
   if (touchR2) {
@@ -270,11 +277,21 @@ export async function POST(req: NextRequest) {
     verifiedAt: new Date(),
   };
 
-  await prisma.userCredentials.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, ...encrypted },
-    update: encrypted,
-  });
+  await prisma.$transaction([
+    prisma.userCredentials.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, ...encrypted },
+      update: encrypted,
+    }),
+    ...(touchAi
+      ? [
+          prisma.user.update({
+            where: { id: user.id },
+            data: { aiFlashModel: nextFlash, aiProModel: nextPro },
+          }),
+        ]
+      : []),
+  ]);
 
   return NextResponse.json({ success: true, hasCredentials: true });
 }

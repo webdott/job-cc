@@ -25,22 +25,22 @@
 
 ## Tech Stack
 
-| Layer         | Technology                                                     |
-| ------------- | -------------------------------------------------------------- |
-| Framework     | Next.js 14 App Router + TypeScript                             |
-| Styling       | Tailwind CSS + shadcn/ui (dark-first)                          |
-| Auth          | Clerk v6 (Google OAuth + magic link)                           |
-| Database      | PostgreSQL via Supabase + Prisma 7                             |
-| AI            | Vercel AI SDK + Google Gemini 2.5 Pro/Flash / Anthropic models |
-| File Storage  | Cloudflare R2 (S3-compatible)                                  |
-| State         | TanStack Query v5 (server state)                               |
-| Drag-and-drop | dnd-kit                                                        |
-| Charts        | Recharts                                                       |
-| Animations    | Framer Motion                                                  |
-| Email         | Brevo transactional API                                        |
-| Push          | web-push (VAPID) — optional device alerts                      |
-| PWA           | next-pwa (Workbox)                                             |
-| Hosting       | Vercel (cron jobs + edge)                                      |
+| Layer         | Technology                                                             |
+| ------------- | ---------------------------------------------------------------------- |
+| Framework     | Next.js 14 App Router + TypeScript                                     |
+| Styling       | Tailwind CSS + shadcn/ui (dark-first)                                  |
+| Auth          | Clerk v6 (Google OAuth + magic link)                                   |
+| Database      | PostgreSQL via Supabase + Prisma 7                                     |
+| AI            | Vercel AI SDK + Google Gemini / Anthropic (operator via `AI_PROVIDER`) |
+| File Storage  | Cloudflare R2 (S3-compatible)                                          |
+| State         | TanStack Query v5 (server state)                                       |
+| Drag-and-drop | dnd-kit                                                                |
+| Charts        | Recharts                                                               |
+| Animations    | Framer Motion                                                          |
+| Email         | Brevo transactional API                                                |
+| Push          | web-push (VAPID) — optional device alerts                              |
+| PWA           | next-pwa (Workbox)                                                     |
+| Hosting       | Vercel (cron jobs + edge)                                              |
 
 ---
 
@@ -97,7 +97,7 @@ pnpm run test
 | `DIRECT_URL`                        | Supabase → Settings → Database → Connection string (Session mode)                                                          |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | [clerk.com](https://clerk.com) → API Keys                                                                                  |
 | `CLERK_SECRET_KEY`                  | Clerk → API Keys                                                                                                           |
-| `GOOGLE_GENERATIVE_AI_API_KEY`      | [aistudio.google.com](https://aistudio.google.com) → Get API key                                                           |
+| `AI_PROVIDER` / `AI_API_KEY`        | `google` or `anthropic` + that provider's API key (AI Studio / Anthropic console)                                          |
 | `CLOUDFLARE_R2_ACCOUNT_ID`          | Cloudflare → R2 → Overview                                                                                                 |
 | `CLOUDFLARE_R2_ACCESS_KEY_ID`       | Cloudflare → R2 → Manage API tokens                                                                                        |
 | `CLOUDFLARE_R2_SECRET_ACCESS_KEY`   | Same as above                                                                                                              |
@@ -121,7 +121,7 @@ pnpm run test
 ## Architecture
 
 - **API Routes** — all server logic lives in `app/api/`. Auth via Clerk middleware (`middleware.ts`)
-- **AI layer** — `lib/ai.ts` exports `proModel` (Gemini 2.5 Pro) and `flashModel` (Flash). Swap to Anthropic Claude by changing two lines
+- **AI layer** — `lib/ai.ts` builds flash/pro models from `AI_PROVIDER` + `AI_API_KEY` (and per-user picks). BYOC users bring their own key + model choices.
 - **DB** — Prisma 7 with pg adapter. Schema in `prisma/schema.prisma`, datasource URL in `prisma.config.ts`
 - **File uploads** — resumes go to Cloudflare R2, URL stored in DB
 - **Crons** — `vercel.json` schedules daily digest (09:00 UTC) and reminder check (08:00 UTC)

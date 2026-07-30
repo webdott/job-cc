@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAllowlisted } from "@/lib/allowlist";
 import { decrypt } from "@/lib/crypto";
-import { proModel, flashModel, buildModelsForProvider, type ModelHandle } from "@/lib/ai";
+import { buildModelsForProvider, buildOperatorModels, type ModelHandle } from "@/lib/ai";
 import { operatorR2Client, createR2Client, type R2Client } from "@/lib/r2";
 import type { EmailCredentials } from "@/lib/email";
 
@@ -19,25 +19,27 @@ function operatorEmailCredentials(): EmailCredentials | null {
   return { apiKey, fromEmail };
 }
 
-const operatorCredentials: ResolvedCredentials = {
-  ai: { proModel, flashModel },
-  r2: operatorR2Client,
-  email: null, // resolved per-call so env changes are picked up without restart in tests
-};
-
 /**
  * Resolves the AI models + R2 client + Brevo email creds a given user should use:
  * the operator's own (allowlisted, or no allowlist configured — the default)
  * or the user's own BYOC credentials, decrypted on the fly. Returns null
  * when a non-allowlisted user hasn't saved (verified) credentials yet.
+ *
+ * Model IDs come from User.aiFlashModel / User.aiProModel (provider defaults if null/stale).
  */
 export async function resolveUserCredentials(
   email: string,
   userId: string
 ): Promise<ResolvedCredentials | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { aiFlashModel: true, aiProModel: true },
+  });
+
   if (isAllowlisted(email)) {
     return {
-      ...operatorCredentials,
+      ai: buildOperatorModels(user?.aiFlashModel, user?.aiProModel),
+      r2: operatorR2Client,
       email: operatorEmailCredentials(),
     };
   }
@@ -46,7 +48,12 @@ export async function resolveUserCredentials(
   if (!stored) return null;
 
   return {
-    ai: buildModelsForProvider(stored.aiProvider, decrypt(stored.aiApiKeyEnc)),
+    ai: buildModelsForProvider(
+      stored.aiProvider,
+      decrypt(stored.aiApiKeyEnc),
+      user?.aiFlashModel ?? undefined,
+      user?.aiProModel ?? undefined
+    ),
     r2: createR2Client({
       accountId: decrypt(stored.r2AccountIdEnc),
       accessKeyId: decrypt(stored.r2AccessKeyIdEnc),

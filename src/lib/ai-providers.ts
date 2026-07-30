@@ -12,6 +12,15 @@ export const AI_PROVIDER_OPTIONS: { value: AiProviderId; label: string }[] = [
   { value: "ANTHROPIC", label: "Anthropic Claude" },
 ];
 
+/** Env / form values like "google" or "GOOGLE" → AiProviderId, or null if unknown. */
+export function parseAiProvider(raw: string | undefined | null): AiProviderId | null {
+  if (!raw?.trim()) return null;
+  const normalized = raw.trim().toUpperCase();
+  return (AI_PROVIDERS as readonly string[]).includes(normalized)
+    ? (normalized as AiProviderId)
+    : null;
+}
+
 function assertUnreachableProvider(provider: never): never {
   throw new Error(`Unhandled AI provider: ${provider}`);
 }

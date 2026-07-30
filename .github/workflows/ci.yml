@@ -15,7 +15,8 @@ env:
   DATABASE_URL: postgresql://test:test@localhost:5433/job_command_center_test
   DIRECT_URL: postgresql://test:test@localhost:5433/job_command_center_test
   CRON_SECRET: test-cron-secret
-  GOOGLE_GENERATIVE_AI_API_KEY: test-key
+  AI_PROVIDER: google
+  AI_API_KEY: test-key
   CLOUDFLARE_R2_ACCOUNT_ID: test
   CLOUDFLARE_R2_ACCESS_KEY_ID: test
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: test

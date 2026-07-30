@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { AI_PROVIDER_OPTIONS, getProviderApiKeyUrl, getProviderLabel } from "@/lib/ai-providers";
 import { CheckCircle, Loader2, KeyRound, ExternalLink } from "lucide-react";
+import { AiModelSelects } from "@/components/ai-model-selects";
 import { Section } from "./section";
 import { useCredentialsSection } from "./use-credentials-section";
 
@@ -12,6 +13,7 @@ export function CredentialsSection() {
     credStatus,
     byoc,
     setByoc,
+    setProvider,
     byocFieldError,
     byocSaved,
     byocMutation,
@@ -42,7 +44,7 @@ export function CredentialsSection() {
             {AI_PROVIDER_OPTIONS.map(({ value, label }) => (
               <button
                 key={value}
-                onClick={() => setByoc((b) => ({ ...b, aiProvider: value }))}
+                onClick={() => setProvider(value)}
                 className={cn(
                   "flex-1 py-2 rounded-lg text-sm font-medium border transition-colors",
                   byoc.aiProvider === value
@@ -68,9 +70,17 @@ export function CredentialsSection() {
             value={byoc.aiApiKey}
             onChange={(e) => setByoc((b) => ({ ...b, aiApiKey: e.target.value }))}
             className={cn(
-              "w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500",
+              "w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500 mb-3",
               byocFieldError === "ai" ? "border-red-500/60" : "border-border"
             )}
+          />
+          <AiModelSelects
+            provider={byoc.aiProvider}
+            flashModel={byoc.aiFlashModel}
+            proModel={byoc.aiProModel}
+            onFlashChange={(id) => setByoc((b) => ({ ...b, aiFlashModel: id }))}
+            onProChange={(id) => setByoc((b) => ({ ...b, aiProModel: id }))}
+            error={byocFieldError === "ai"}
           />
         </div>
 

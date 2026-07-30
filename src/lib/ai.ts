@@ -1,49 +1,84 @@
-import { google, createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { AiProviderId } from "@/lib/ai-providers";
+import { parseAiProvider, type AiProviderId } from "@/lib/ai-providers";
+import { getDefaultModels, resolveModelIds } from "@/lib/ai-models";
 
-// Primary model — Gemini 2.5 Pro for complex tasks (cover letters, job evaluation)
-export const proModel = google("gemini-2.5-pro");
+// Probe type from a real provider factory so ModelHandle stays in sync with
+// whatever @ai-sdk/google / @ai-sdk/anthropic return (the `ai` package's
+// exported LanguageModel type lags behind).
 
-// Fast model — Gemini 2.5 Flash for cheaper tasks (scoring, parsing, field extraction)
-export const flashModel = google("gemini-2.5-flash");
-
-// The `ai` package's own exported `LanguageModel` type lags behind the
-// model spec version @ai-sdk/google and @ai-sdk/anthropic actually produce
-// (v4) — derive the type structurally from a real model instead of relying
-// on that name, so it always matches what these provider packages return.
-export type ModelHandle = typeof proModel;
-
-// To swap to Claude later, replace the above with:
-// import { anthropic } from "@ai-sdk/anthropic";
-// export const proModel = anthropic("claude-sonnet-4-6");
-// export const flashModel = anthropic("claude-haiku-4-5");
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _typeProbe = createGoogleGenerativeAI({ apiKey: "type-probe" })("gemini-3.6-flash");
+export type ModelHandle = typeof _typeProbe;
 
 function assertUnreachableProvider(provider: never): never {
   throw new Error(`Unhandled AI provider: ${provider}`);
 }
 
-/** Builds a { proModel, flashModel } pair from a BYOC user's own provider + API key (see lib/byoc.ts). */
+/** Operator AI provider from `AI_PROVIDER` (google / anthropic, case-insensitive). */
+export function getOperatorProvider(): AiProviderId {
+  const parsed = parseAiProvider(process.env.AI_PROVIDER);
+  if (!parsed) {
+    throw new Error(
+      'AI_PROVIDER must be set to "google" or "anthropic" (got ' +
+        JSON.stringify(process.env.AI_PROVIDER ?? "") +
+        ")."
+    );
+  }
+  return parsed;
+}
+
+/** Operator API key from `AI_API_KEY` — never use the SDK's provider-specific env defaults. */
+export function getOperatorApiKey(): string {
+  const key = process.env.AI_API_KEY?.trim();
+  if (!key) {
+    throw new Error("AI_API_KEY is not set.");
+  }
+  return key;
+}
+
+/**
+ * Builds a { proModel, flashModel } pair for a provider + API key + model IDs.
+ * Used for both the operator (env) and BYOC users.
+ */
 export function buildModelsForProvider(
   provider: AiProviderId,
-  apiKey: string
+  apiKey: string,
+  flashModelId?: string,
+  proModelId?: string
 ): { proModel: ModelHandle; flashModel: ModelHandle } {
+  const { flash, pro } = resolveModelIds(provider, flashModelId, proModelId);
   switch (provider) {
     case "GOOGLE": {
       const googleProvider = createGoogleGenerativeAI({ apiKey });
       return {
-        proModel: googleProvider("gemini-2.5-pro"),
-        flashModel: googleProvider("gemini-2.5-flash"),
+        proModel: googleProvider(pro),
+        flashModel: googleProvider(flash),
       };
     }
     case "ANTHROPIC": {
       const anthropicProvider = createAnthropic({ apiKey });
       return {
-        proModel: anthropicProvider("claude-sonnet-4-6"),
-        flashModel: anthropicProvider("claude-haiku-4-5"),
+        proModel: anthropicProvider(pro),
+        flashModel: anthropicProvider(flash),
       };
     }
     default:
       return assertUnreachableProvider(provider);
   }
+}
+
+/** Operator defaults when a user has no saved model prefs (safe free-tier baseline for Google). */
+export function buildOperatorModels(
+  flashModelId?: string | null,
+  proModelId?: string | null
+): { proModel: ModelHandle; flashModel: ModelHandle } {
+  const provider = getOperatorProvider();
+  const defaults = getDefaultModels(provider);
+  return buildModelsForProvider(
+    provider,
+    getOperatorApiKey(),
+    flashModelId ?? defaults.flash,
+    proModelId ?? defaults.pro
+  );
 }

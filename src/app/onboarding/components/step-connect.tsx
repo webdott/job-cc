@@ -1,12 +1,24 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { AI_PROVIDER_OPTIONS, getProviderApiKeyUrl } from "@/lib/ai-providers";
+import { AI_PROVIDER_OPTIONS, getProviderApiKeyUrl, type AiProviderId } from "@/lib/ai-providers";
+import { getDefaultModels } from "@/lib/ai-models";
+import { AiModelSelects } from "@/components/ai-model-selects";
 import { ChevronRight, Loader2, ExternalLink } from "lucide-react";
 import { useByocStep } from "./use-byoc-step";
 
 export function StepConnect({ onComplete }: { onComplete: () => void }) {
   const { byoc, setByoc, byocFieldError, loading, error, submit } = useByocStep(onComplete);
+
+  function setProvider(provider: AiProviderId) {
+    const defaults = getDefaultModels(provider);
+    setByoc((b) => ({
+      ...b,
+      aiProvider: provider,
+      aiFlashModel: defaults.flash,
+      aiProModel: defaults.pro,
+    }));
+  }
 
   return (
     <div>
@@ -24,7 +36,7 @@ export function StepConnect({ onComplete }: { onComplete: () => void }) {
             {AI_PROVIDER_OPTIONS.map(({ value, label }) => (
               <button
                 key={value}
-                onClick={() => setByoc((b) => ({ ...b, aiProvider: value }))}
+                onClick={() => setProvider(value)}
                 className={cn(
                   "flex-1 py-2 rounded-lg text-sm font-medium border transition-colors",
                   byoc.aiProvider === value
@@ -50,9 +62,17 @@ export function StepConnect({ onComplete }: { onComplete: () => void }) {
             value={byoc.aiApiKey}
             onChange={(e) => setByoc((b) => ({ ...b, aiApiKey: e.target.value }))}
             className={cn(
-              "w-full bg-muted border rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500",
+              "w-full bg-muted border rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 mb-3",
               byocFieldError === "ai" ? "border-red-500/60" : "border-border"
             )}
+          />
+          <AiModelSelects
+            provider={byoc.aiProvider}
+            flashModel={byoc.aiFlashModel}
+            proModel={byoc.aiProModel}
+            onFlashChange={(id) => setByoc((b) => ({ ...b, aiFlashModel: id }))}
+            onProChange={(id) => setByoc((b) => ({ ...b, aiProModel: id }))}
+            error={byocFieldError === "ai"}
           />
         </div>
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getDefaultModels } from "@/lib/ai-models";
+import type { AiProviderId } from "@/lib/ai-providers";
 import { EMPTY_BYOC_FORM, type ByocForm, type CredentialsStatus } from "../types";
 
 function hasAnyCredentialInput(form: ByocForm) {
@@ -26,6 +28,11 @@ function isFullCredentialForm(form: ByocForm) {
     form.brevoApiKey.trim() &&
     form.brevoFromEmail.trim()
   );
+}
+
+function withProviderDefaults(provider: AiProviderId, prev: ByocForm): ByocForm {
+  const defaults = getDefaultModels(provider);
+  return { ...prev, aiProvider: provider, aiFlashModel: defaults.flash, aiProModel: defaults.pro };
 }
 
 export function useCredentialsSection() {
@@ -56,17 +63,31 @@ export function useCredentialsSection() {
 
   useEffect(() => {
     if (!credStatus?.aiProvider) return;
-    setByoc((b) =>
-      b.aiProvider === credStatus.aiProvider ? b : { ...b, aiProvider: credStatus.aiProvider! }
-    );
-  }, [credStatus?.aiProvider]);
+    setByoc((b) => {
+      const defaults = getDefaultModels(credStatus.aiProvider!);
+      return {
+        ...b,
+        aiProvider: credStatus.aiProvider!,
+        aiFlashModel: credStatus.aiFlashModel ?? defaults.flash,
+        aiProModel: credStatus.aiProModel ?? defaults.pro,
+      };
+    });
+  }, [credStatus?.aiProvider, credStatus?.aiFlashModel, credStatus?.aiProModel]);
 
   const hasCredentials = !!credStatus?.hasCredentials;
   const providerChanged =
     hasCredentials && !!credStatus?.aiProvider && byoc.aiProvider !== credStatus.aiProvider;
+  const modelsChanged =
+    hasCredentials &&
+    (byoc.aiFlashModel !== (credStatus?.aiFlashModel ?? byoc.aiFlashModel) ||
+      byoc.aiProModel !== (credStatus?.aiProModel ?? byoc.aiProModel));
   const canSubmit = hasCredentials
-    ? hasAnyCredentialInput(byoc) || providerChanged
+    ? hasAnyCredentialInput(byoc) || providerChanged || modelsChanged
     : isFullCredentialForm(byoc);
+
+  const setProvider = (provider: AiProviderId) => {
+    setByoc((b) => withProviderDefaults(provider, b));
+  };
 
   const byocMutation = useMutation({
     mutationFn: async (form: ByocForm) => {
@@ -75,6 +96,9 @@ export function useCredentialsSection() {
             aiProvider: form.aiProvider,
             // Only send non-empty secrets/fields so the API treats blanks as "keep"
             ...(form.aiApiKey.trim() ? { aiApiKey: form.aiApiKey.trim() } : {}),
+            ...(providerChanged || modelsChanged || form.aiApiKey.trim()
+              ? { aiFlashModel: form.aiFlashModel, aiProModel: form.aiProModel }
+              : {}),
             ...(form.r2AccountId.trim() ? { r2AccountId: form.r2AccountId.trim() } : {}),
             ...(form.r2AccessKeyId.trim() ? { r2AccessKeyId: form.r2AccessKeyId.trim() } : {}),
             ...(form.r2SecretAccessKey.trim()
@@ -106,6 +130,8 @@ export function useCredentialsSection() {
       setByoc((prev) => ({
         ...EMPTY_BYOC_FORM,
         aiProvider: prev.aiProvider,
+        aiFlashModel: prev.aiFlashModel,
+        aiProModel: prev.aiProModel,
       }));
       setByocSaved(true);
       setTimeout(() => setByocSaved(false), 2000);
@@ -118,6 +144,7 @@ export function useCredentialsSection() {
     credStatus,
     byoc,
     setByoc,
+    setProvider,
     byocFieldError,
     byocSaved,
     byocMutation,
