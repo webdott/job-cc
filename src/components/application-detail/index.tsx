@@ -80,10 +80,10 @@ export function ApplicationDetail({ applicationId, onClose }: ApplicationDetailP
         exit={isMobile ? { opacity: 1, y: "100%" } : { opacity: 0, x: 40 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
         className={cn(
-          // Mobile: bottom sheet — stop above the bottom tab bar (h-16)
-          "fixed bottom-16 left-0 right-0 z-50 bg-card border-t border-border rounded-t-2xl max-h-[80vh] flex flex-col",
+          // Mobile: bottom sheet — stop above the bottom tab bar (h-16 + inset)
+          "fixed bottom-[calc(4rem+var(--app-bottom-inset,env(safe-area-inset-bottom,0px)))] left-0 right-0 z-50 flex max-h-[80vh] flex-col rounded-t-2xl border-t border-border bg-card",
           // Desktop: right side panel — full height, no offset needed
-          "md:bottom-0 md:relative md:left-auto md:right-auto md:rounded-none md:border-t-0 md:border-l md:max-h-none md:h-full md:w-[420px] md:shrink-0"
+          "md:relative md:bottom-0 md:left-auto md:right-auto md:h-full md:max-h-none md:w-[420px] md:shrink-0 md:rounded-none md:border-l md:border-t-0"
         )}
       >
         {/* Header */}

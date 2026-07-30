@@ -2,7 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { installIosPwaViewportFix } from "@/lib/ios-pwa-viewport";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -13,6 +14,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       })
   );
+
+  useEffect(() => installIosPwaViewportFix(), []);
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
