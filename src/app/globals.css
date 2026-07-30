@@ -71,26 +71,22 @@
   }
 
   /*
-   * iOS standalone PWA: 100dvh can be shorter than the visible window on first
-   * paint, leaving a black strip under position:fixed bottom chrome. Prefer
-   * -webkit-fill-available so the document fills the WKWebView.
+   * --app-height / --app-bottom-inset are set by installIosPwaViewportFix for
+   * installed iOS PWAs (WebKit lying-viewport bug). Browser tabs keep 100dvh.
    */
+  :root {
+    --app-height: 100dvh;
+    --app-bottom-inset: env(safe-area-inset-bottom, 0px);
+  }
+
   html {
-    height: 100%;
+    height: var(--app-height, 100dvh);
     background-color: hsl(var(--background));
   }
+
   body {
     @apply bg-background text-foreground;
-    min-height: 100%;
-    min-height: 100dvh;
-  }
-  @supports (-webkit-touch-callout: none) {
-    html {
-      height: -webkit-fill-available;
-    }
-    body {
-      min-height: -webkit-fill-available;
-    }
+    min-height: var(--app-height, 100dvh);
   }
 }
 

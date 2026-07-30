@@ -67,7 +67,13 @@ describe("GET /api/user/credentials", () => {
     const user = await createTestUser();
     mockAuth.mockResolvedValue({ userId: user.clerkId });
     const res = await GET();
-    expect(await res.json()).toEqual({ hasCredentials: false, aiProvider: null, verifiedAt: null });
+    expect(await res.json()).toEqual({
+      hasCredentials: false,
+      aiProvider: null,
+      verifiedAt: null,
+      aiFlashModel: null,
+      aiProModel: null,
+    });
   });
 
   it("reports hasCredentials without ever returning plaintext", async () => {
@@ -133,7 +139,7 @@ describe("POST /api/user/credentials", () => {
       expect.objectContaining({
         prompt: "ping",
         maxOutputTokens: 64,
-        providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+        providerOptions: { google: { thinkingConfig: { thinkingLevel: "minimal" } } },
       })
     );
   });
@@ -245,5 +251,25 @@ describe("POST /api/user/credentials", () => {
     const res = await POST(credentialsRequest({ aiProvider: "GOOGLE" }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/at least one new value/i);
+  });
+
+  it("persists model picks on User when provided with credentials", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    const res = await POST(
+      credentialsRequest({
+        ...validBody,
+        aiFlashModel: "gemini-3.5-flash-lite",
+        aiProModel: "gemini-3.6-flash",
+      })
+    );
+    expect(res.status).toBe(200);
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updated.aiFlashModel).toBe("gemini-3.5-flash-lite");
+    expect(updated.aiProModel).toBe("gemini-3.6-flash");
+    // Same-model skip doesn't apply — two different models → two pings
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
   });
 });

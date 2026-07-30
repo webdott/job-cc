@@ -41,7 +41,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   return (
-    <div className="fixed inset-0 flex bg-background text-foreground">
+    // Not position:fixed — iOS standalone clips fixed roots to the lying viewport
+    // and leaves a black strip under the tab bar. Height comes from --app-height
+    // (100vh in installed PWA, 100dvh in browser); see ios-pwa-viewport.ts.
+    <div className="flex h-[var(--app-height,100dvh)] overflow-hidden bg-background text-foreground">
       {/* Sidebar — desktop only */}
       <aside className="hidden md:flex md:flex-col w-60 border-r border-border bg-card shrink-0">
         <div className="h-14 flex items-center px-6 border-b border-border">
@@ -69,21 +72,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Top bar — pt-safe-top keeps content below the iOS status bar in standalone PWA */}
-        <header className="pt-safe-top border-b border-border shrink-0">
-          <div className="h-14 flex items-center justify-between gap-1 px-4 md:px-6">
-            <span className="md:hidden text-lg font-semibold tracking-tight">
+        <header className="shrink-0 border-b border-border pt-safe-top bg-card">
+          <div className="flex h-[55px] items-center justify-between gap-1 px-4 md:px-6">
+            <span className="text-lg font-semibold tracking-tight md:hidden">
               Job<span className="text-blue-500">CC</span>
             </span>
-            <div className="flex items-center gap-1 ml-auto">
+            <div className="ml-auto flex items-center gap-1">
               <NotificationBell />
               <SignOutButton />
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-[calc(4rem+theme(spacing.safe-bottom))] md:pb-0">
+        <main className="min-h-0 flex-1 overflow-y-auto">
           {/* Enter-only: AnimatePresence mode="wait" can leave App Router navigations stuck blank */}
           <motion.div
             key={pathname}
@@ -96,15 +99,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </motion.div>
         </main>
 
-        {/* Bottom tab bar — mobile only. pb-safe-bottom paints under the home indicator once the shell fills the WKWebView. */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-card pb-safe-bottom">
+        {/* In-flow (not fixed): avoids iOS fixed-bar misposition until scroll */}
+        <nav
+          className="z-50 shrink-0 border-t border-border bg-card md:hidden"
+          style={{ paddingBottom: "var(--app-bottom-inset, env(safe-area-inset-bottom, 0px))" }}
+        >
           <div className="flex h-16 items-center justify-around px-2">
             {navItems.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs transition-colors",
+                  "flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs transition-colors",
                   pathname === href ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
               >

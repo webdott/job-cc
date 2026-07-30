@@ -31,6 +31,9 @@ model User {
   name              String?
   preferences       Json               @default("{}")
   pushSubscription  Json?
+  // Per-user AI model picks (allowlisted + BYOC). Null → provider defaults.
+  aiFlashModel      String?
+  aiProModel        String?
   createdAt         DateTime           @default(now())
   resumes           Resume[]
   jobs              Job[]

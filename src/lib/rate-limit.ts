@@ -14,7 +14,7 @@ export const aiRatelimit = new Ratelimit({
  * rather than competing with interactive AI routes for `aiRatelimit`.
  *
  * Sized for the worst case we have to tolerate: a BYOC user on the AI Studio
- * free tier, where gemini-2.5-flash is capped near 10 RPM. Paid tiers allow far
+ * free tier, where Flash models are capped near 10 RPM. Paid tiers allow far
  * more, so raise SCORE_RATE_LIMIT_PER_MINUTE if every user is on billing.
  */
 const SCORE_RATE_LIMIT_PER_MINUTE = Number(process.env.SCORE_RATE_LIMIT_PER_MINUTE ?? 10);
