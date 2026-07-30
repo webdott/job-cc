@@ -97,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
 
         {/* Bottom tab bar — mobile only */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-card border-t border-border z-50">
+        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-card border-t border-border z-50 pb-safe-bottom">
           <div className="flex items-center justify-around h-16 px-2">
             {navItems.map(({ href, label, icon: Icon }) => (
               <Link
