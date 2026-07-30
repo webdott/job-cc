@@ -12,6 +12,7 @@ import { FiltersBar } from "./components/filters-bar";
 import { ManualAdd } from "./components/manual-add";
 import { BulkActionBar } from "./components/bulk-action-bar";
 import { Pagination } from "./components/pagination";
+import { ScanProgressBanner } from "./components/scan-progress-banner";
 
 export default function DiscoverPage() {
   return (
@@ -54,6 +55,8 @@ function DiscoverPageContent() {
     checkedIds,
     setCheckedIds,
     scanMutation,
+    scanProgress,
+    isScanning,
     manualMutation,
     deleteMutation,
     bulkDeleteMutation,
@@ -83,21 +86,16 @@ function DiscoverPageContent() {
               </div>
               <button
                 onClick={() => scanMutation.mutate()}
-                disabled={scanMutation.isPending}
+                disabled={isScanning}
                 className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
               >
-                <RefreshCw className={cn("h-4 w-4", scanMutation.isPending && "animate-spin")} />
-                {scanMutation.isPending ? "Scanning…" : "Scan for jobs"}
+                <RefreshCw className={cn("h-4 w-4", isScanning && "animate-spin")} />
+                {isScanning ? "Scanning…" : "Scan for jobs"}
               </button>
             </div>
 
-            {/* Scan result */}
-            {scanMutation.isSuccess && (
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-2.5 mb-4 text-sm text-green-400">
-                Found {scanMutation.data.discovered} new jobs, scored {scanMutation.data.scored}{" "}
-                against your resume.
-              </div>
-            )}
+            {/* Ingest + scoring progress */}
+            {scanProgress && <ScanProgressBanner progress={scanProgress} />}
 
             <FiltersBar
               minScore={minScore}

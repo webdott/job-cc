@@ -2,14 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resetTestDb, createTestUser } from "@/lib/__tests__/test-db";
-import { scoreJob } from "@/lib/job-scorer";
 import { notifyUser } from "@/lib/notifications";
 import { GET } from "./route";
 
-vi.mock("@/lib/job-scorer", () => ({ scoreJob: vi.fn() }));
 vi.mock("@/lib/notifications", () => ({ notifyUser: vi.fn() }));
 
-const mockScoreJob = scoreJob as unknown as ReturnType<typeof vi.fn>;
 const mockNotifyUser = notifyUser as unknown as ReturnType<typeof vi.fn>;
 
 function cronRequest(bearer?: string) {
@@ -18,25 +15,47 @@ function cronRequest(bearer?: string) {
   });
 }
 
-/** No jobs from any of the three sources — keeps the Prisma-focused tests from needing real network shapes. */
-function stubEmptySources() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockImplementation((url: string) => {
-      if (url.includes("remotive.com"))
-        return Promise.resolve({ json: async () => ({ jobs: [] }) });
-      if (url.includes("arbeitnow.com"))
-        return Promise.resolve({ json: async () => ({ data: [], links: {} }) });
-      if (url.includes("algolia.com/api/v1/search"))
-        return Promise.resolve({ json: async () => ({ hits: [] }) });
-      return Promise.resolve({ json: async () => ({}) });
-    })
-  );
+async function userWithActiveResume() {
+  const user = await createTestUser();
+  await prisma.resume.create({
+    data: {
+      userId: user.id,
+      label: "Active",
+      fileUrl: "https://example.com/r.pdf",
+      isActive: true,
+      parsedData: { skills: ["TypeScript"], experience: [] },
+    },
+  });
+  return user;
+}
+
+async function scoredJob(
+  userId: string,
+  opts: { title: string; company: string; score: number; fetchedAt?: Date }
+) {
+  const job = await prisma.job.create({
+    data: {
+      userId,
+      sourceUrl: `https://example.com/job/${opts.title}-${opts.company}`,
+      title: opts.title,
+      company: opts.company,
+      description: "desc",
+      ...(opts.fetchedAt ? { fetchedAt: opts.fetchedAt } : {}),
+    },
+  });
+  await prisma.jobEvaluation.create({
+    data: {
+      jobId: job.id,
+      userId,
+      overallScore: opts.score,
+      recommendation: "APPLY",
+    },
+  });
+  return job;
 }
 
 beforeEach(async () => {
   await resetTestDb();
-  mockScoreJob.mockReset();
   mockNotifyUser.mockReset();
   mockNotifyUser.mockResolvedValue({ created: true, pushed: 1, emailed: true });
 });
@@ -47,14 +66,13 @@ afterEach(() => {
 
 describe("GET /api/cron/daily-digest", () => {
   it("returns 401 without the correct bearer token", async () => {
-    stubEmptySources();
     const res = await GET(cronRequest("wrong"));
     expect(res.status).toBe(401);
   });
 
   it("only processes users with an active resume", async () => {
-    stubEmptySources();
     await createTestUser(); // no resume at all
+
     const withInactiveResume = await createTestUser();
     await prisma.resume.create({
       data: {
@@ -64,16 +82,8 @@ describe("GET /api/cron/daily-digest", () => {
         isActive: false,
       },
     });
-    const withActiveResume = await createTestUser();
-    await prisma.resume.create({
-      data: {
-        userId: withActiveResume.id,
-        label: "Active",
-        fileUrl: "https://example.com/r.pdf",
-        isActive: true,
-        parsedData: { skills: [], experience: [] },
-      },
-    });
+
+    await userWithActiveResume();
 
     const res = await GET(cronRequest(process.env.CRON_SECRET));
     const body = await res.json();
@@ -81,65 +91,75 @@ describe("GET /api/cron/daily-digest", () => {
     expect(body.usersProcessed).toBe(1);
   });
 
-  it("upserts, scores a new job, and notifies the user with an active resume", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((url: string) => {
-        if (url.includes("remotive.com")) {
-          return Promise.resolve({
-            json: async () => ({
-              jobs: [
-                {
-                  id: 1,
-                  url: "https://remotive.com/job/1",
-                  title: "Backend Engineer",
-                  company_name: "Acme",
-                  candidate_required_location: "Remote",
-                  description: "<p>Build things</p>",
-                  salary: "",
-                  publication_date: "2026-01-01",
-                },
-              ],
-            }),
-          });
-        }
-        if (url.includes("arbeitnow.com"))
-          return Promise.resolve({ json: async () => ({ data: [], links: {} }) });
-        if (url.includes("algolia.com/api/v1/search"))
-          return Promise.resolve({ json: async () => ({ hits: [] }) });
-        return Promise.resolve({ json: async () => ({}) });
-      })
-    );
+  it("notifies with the highest-scoring job from the last 24h", async () => {
+    const user = await userWithActiveResume();
+    await scoredJob(user.id, { title: "Backend Engineer", company: "Acme", score: 61 });
+    await scoredJob(user.id, { title: "Staff Engineer", company: "Globex", score: 92 });
 
-    const user = await createTestUser();
-    await prisma.resume.create({
-      data: {
-        userId: user.id,
-        label: "Active",
-        fileUrl: "https://example.com/r.pdf",
-        isActive: true,
-        parsedData: { skills: ["TypeScript"], experience: [] },
-      },
-    });
+    const res = await GET(cronRequest(process.env.CRON_SECRET));
+    const body = await res.json();
 
-    mockScoreJob.mockResolvedValue({
-      overallScore: 88,
-      recommendation: "APPLY",
-      reason: "Great fit",
+    expect(res.status).toBe(200);
+    expect(body.notificationsSent).toBe(1);
+    expect(mockNotifyUser).toHaveBeenCalledTimes(1);
+
+    const { body: message, type, url } = mockNotifyUser.mock.calls[0][0];
+    expect(type).toBe("job_match");
+    expect(url).toBe("/discover");
+    expect(message).toContain("2 new job matches");
+    // Best match named, not merely the most recent.
+    expect(message).toContain("Staff Engineer at Globex (92%)");
+  });
+
+  it("ignores jobs fetched outside the digest window", async () => {
+    const user = await userWithActiveResume();
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    await scoredJob(user.id, {
+      title: "Stale Role",
+      company: "Initech",
+      score: 95,
+      fetchedAt: threeDaysAgo,
     });
 
     const res = await GET(cronRequest(process.env.CRON_SECRET));
     const body = await res.json();
+
     expect(res.status).toBe(200);
-    expect(body.notificationsSent).toBe(1);
+    expect(body.usersProcessed).toBe(1);
+    expect(body.notificationsSent).toBe(0);
+    expect(mockNotifyUser).not.toHaveBeenCalled();
+  });
 
-    const job = await prisma.job.findFirst({ where: { userId: user.id } });
-    expect(job?.title).toBe("Backend Engineer");
-    // sanitizeJobDescription runs on Remotive's HTML description
-    expect(job?.description).toBe("<p>Build things</p>");
+  it("skips unscored jobs rather than emailing about them", async () => {
+    const user = await userWithActiveResume();
+    await prisma.job.create({
+      data: {
+        userId: user.id,
+        sourceUrl: "https://example.com/job/unscored",
+        title: "Unscored Role",
+        company: "Acme",
+        description: "desc",
+      },
+    });
 
-    const evaluation = await prisma.jobEvaluation.findFirst({ where: { userId: user.id } });
-    expect(evaluation?.overallScore).toBe(88);
-    expect(mockNotifyUser).toHaveBeenCalledTimes(1);
+    const res = await GET(cronRequest(process.env.CRON_SECRET));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.notificationsSent).toBe(0);
+    expect(mockNotifyUser).not.toHaveBeenCalled();
+  });
+
+  it("makes no outbound requests — ingestion and scoring moved out of the digest", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const user = await userWithActiveResume();
+    await scoredJob(user.id, { title: "Backend Engineer", company: "Acme", score: 80 });
+
+    const res = await GET(cronRequest(process.env.CRON_SECRET));
+
+    expect(res.status).toBe(200);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

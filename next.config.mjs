@@ -35,7 +35,13 @@ const pwaConfig = withPWA({
       options: { cacheName: "next-static-js-assets", expiration: { maxEntries: 64, maxAgeSeconds: 24 * 60 * 60 } },
     },
     {
-      urlPattern: /\/api\/(?!push\/).+/i,
+      // Excluded from the generic API cache:
+      //   push/            — subscription state must never be served stale
+      //   internal/        — self-invoked background workers, never fetched by the browser
+      //   jobs/score-batch — drain progress; a cached response would report
+      //                      stale `remaining` and stall the client's loop, and
+      //                      the 10s network timeout below would fire mid-chunk
+      urlPattern: /\/api\/(?!push\/|internal\/|jobs\/score-batch).+/i,
       handler: "NetworkFirst",
       options: {
         cacheName: "api-cache",

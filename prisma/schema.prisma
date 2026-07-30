@@ -82,19 +82,27 @@ model Resume {
 }
 
 model Job {
-  id           String         @id @default(cuid())
-  sourceUrl    String
-  sourceId     String?
-  title        String
-  company      String
-  location     String?
-  description  String
-  salaryMin    Int?
-  salaryMax    Int?
-  remote       Boolean        @default(false)
-  postedAt     DateTime?
-  fetchedAt    DateTime       @default(now())
-  status       JobStatus      @default(UNSEEN)
+  id          String    @id @default(cuid())
+  sourceUrl   String
+  sourceId    String?
+  title       String
+  company     String
+  location    String?
+  description String
+  salaryMin   Int?
+  salaryMax   Int?
+  remote      Boolean   @default(false)
+  postedAt    DateTime?
+  fetchedAt   DateTime  @default(now())
+  status      JobStatus @default(UNSEEN)
+
+  /// Number of *permanent* scoring failures (bad model output, 4xx). Transient
+  /// failures (429/5xx) deliberately do not increment this. A job leaves the
+  /// scoring queue at MAX_SCORE_ATTEMPTS so one malformed description can't
+  /// block the head of the queue forever. See lib/score-queue.ts.
+  scoreAttempts Int     @default(0)
+  scoreError    String?
+
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   evaluation   JobEvaluation?
@@ -102,6 +110,9 @@ model Job {
   pdfExports   PdfExport[]
 
   @@unique([sourceUrl, userId])
+  // Drives the scoring queue (unscored jobs for a user, newest first) and the
+  // discover list. Job previously had no index on userId at all.
+  @@index([userId, status, fetchedAt])
 }
 
 model JobEvaluation {
@@ -144,6 +155,10 @@ model Application {
   evaluation     JobEvaluation? @relation(fields: [evaluationId], references: [id])
   pdfExports     PdfExport[]
   createdAt      DateTime       @default(now())
+
+  // The reminders cron scans for due follow-ups across all users; without this
+  // it is a full table scan.
+  @@index([followUpAt, stage])
 }
 
 model CoverLetter {

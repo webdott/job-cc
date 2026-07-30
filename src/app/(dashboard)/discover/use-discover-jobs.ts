@@ -1,7 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { DiscoverResponse, Job, JobsResponse } from "./types";
+import type {
+  DiscoverResponse,
+  Job,
+  JobsResponse,
+  ScanProgress,
+  ScoreBatchResponse,
+} from "./types";
+
+/** Backstop against an unproductive drain loop; the server also caps chunk size. */
+const MAX_DRAIN_BATCHES = 200;
 
 /** All data fetching, filters, selection, and mutation logic for the Discover job list. */
 export function useDiscoverJobs() {
@@ -52,16 +61,143 @@ export function useDiscoverJobs() {
     }
   }, [linkedJobId, data, linkedJobData]);
 
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  /** Set on unmount so an in-flight drain stops issuing requests. */
+  const drainCancelled = useRef(false);
+  useEffect(() => {
+    drainCancelled.current = false;
+    return () => {
+      drainCancelled.current = true;
+    };
+  }, []);
+
+  /**
+   * Walks the scoring queue in chunks after a scan.
+   *
+   * The server scores a bounded slice per request so nothing can time out;
+   * driving the loop from here is what lets results stream into the list as
+   * they land. Abandoning it costs nothing — unscored jobs stay queued and the
+   * nightly cron picks them up.
+   */
+  const runDrain = useCallback(
+    async (discovered: number, queuedAtStart: number) => {
+      let scored = 0;
+      let remaining = queuedAtStart;
+
+      for (let batch = 0; remaining > 0 && batch < MAX_DRAIN_BATCHES; batch++) {
+        if (drainCancelled.current) return;
+
+        let result: ScoreBatchResponse;
+        try {
+          const res = await fetch("/api/jobs/score-batch", { method: "POST" });
+          if (!res.ok) throw new Error(`Scoring failed (${res.status})`);
+          result = (await res.json()) as ScoreBatchResponse;
+        } catch (err) {
+          if (drainCancelled.current) return;
+          setScanProgress({
+            status: "error",
+            discovered,
+            scored,
+            queuedAtStart,
+            remaining,
+            message: err instanceof Error ? err.message : "Scoring failed",
+          });
+          return;
+        }
+
+        if (drainCancelled.current) return;
+
+        scored += result.scored;
+        remaining = result.remaining;
+
+        // Show each chunk's results as soon as they land.
+        queryClient.invalidateQueries({ queryKey: ["jobs"] });
+
+        // Nothing moved — the provider is rate-limiting us. Backing off here
+        // rather than retrying keeps us from hammering it; the rest of the
+        // queue is drained by the nightly cron or the next scan.
+        if (result.scored === 0 && result.failed === 0) {
+          setScanProgress({
+            status: "paused",
+            discovered,
+            scored,
+            queuedAtStart,
+            remaining,
+            message: "Rate limited — the rest will be scored in the background.",
+          });
+          return;
+        }
+
+        setScanProgress({ status: "scoring", discovered, scored, queuedAtStart, remaining });
+      }
+
+      if (!drainCancelled.current) {
+        setScanProgress({ status: "done", discovered, scored, queuedAtStart, remaining });
+      }
+    },
+    [queryClient]
+  );
+
   const scanMutation = useMutation<DiscoverResponse>({
     mutationFn: async () => {
       const res = await fetch("/api/jobs/discover", { method: "POST" });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Scan failed (${res.status})`);
+      }
       return res.json() as Promise<DiscoverResponse>;
     },
-    onSuccess: () => {
+    onMutate: () => {
+      setScanProgress({
+        status: "ingesting",
+        discovered: 0,
+        scored: 0,
+        queuedAtStart: 0,
+        remaining: 0,
+      });
+    },
+    onSuccess: (data) => {
       setPage(1);
+      // The rows exist now, just unscored — worth showing immediately.
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+
+      if (data.remainingToScore === 0) {
+        setScanProgress({
+          status: "done",
+          discovered: data.discovered,
+          scored: 0,
+          queuedAtStart: 0,
+          remaining: 0,
+        });
+        return;
+      }
+
+      setScanProgress({
+        status: "scoring",
+        discovered: data.discovered,
+        scored: 0,
+        queuedAtStart: data.remainingToScore,
+        remaining: data.remainingToScore,
+      });
+      void runDrain(data.discovered, data.remainingToScore);
+    },
+    onError: (err) => {
+      setScanProgress({
+        status: "error",
+        discovered: 0,
+        scored: 0,
+        queuedAtStart: 0,
+        remaining: 0,
+        message: err instanceof Error ? err.message : "Scan failed",
+      });
     },
   });
+
+  /** True for the whole ingest + drain cycle, not just the initial request. */
+  const isScanning =
+    scanMutation.isPending ||
+    scanProgress?.status === "ingesting" ||
+    scanProgress?.status === "scoring";
 
   const manualMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -168,6 +304,8 @@ export function useDiscoverJobs() {
     checkedIds,
     setCheckedIds,
     scanMutation,
+    scanProgress,
+    isScanning,
     manualMutation,
     deleteMutation,
     bulkDeleteMutation,

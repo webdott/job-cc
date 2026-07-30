@@ -1,17 +1,28 @@
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
-
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL ?? "",
-  token: process.env.UPSTASH_REDIS_REST_TOKEN ?? "",
-});
+import { redis } from "@/lib/redis";
 
 // AI-calling routes hit Gemini + the DB per request — keep this tight.
 export const aiRatelimit = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(10, "1 m"),
   prefix: "ratelimit:ai",
+});
+
+/**
+ * Bulk scoring runs many model calls back to back, so it gets its own budget
+ * rather than competing with interactive AI routes for `aiRatelimit`.
+ *
+ * Sized for the worst case we have to tolerate: a BYOC user on the AI Studio
+ * free tier, where gemini-2.5-flash is capped near 10 RPM. Paid tiers allow far
+ * more, so raise SCORE_RATE_LIMIT_PER_MINUTE if every user is on billing.
+ */
+const SCORE_RATE_LIMIT_PER_MINUTE = Number(process.env.SCORE_RATE_LIMIT_PER_MINUTE ?? 10);
+
+export const scoringRatelimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(SCORE_RATE_LIMIT_PER_MINUTE, "1 m"),
+  prefix: "ratelimit:scoring",
 });
 
 /**
