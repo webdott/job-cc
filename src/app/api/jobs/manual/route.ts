@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { scoreJob } from "@/lib/job-scorer";
-import { readJobPreferences } from "@/lib/job-match";
+import { readJobPreferences, dedupeKeyFor } from "@/lib/job-match";
+import { JOB_CLIENT_SELECT } from "@/lib/job-select";
 import type { ParsedResume } from "@/lib/resume-parser";
 import * as cheerio from "cheerio";
 import { stripToPlainText } from "@/lib/sanitize";
@@ -47,6 +48,20 @@ export async function POST(req: NextRequest) {
   let textContent = rawText ?? "";
   const sourceUrl = url ?? `manual-${Date.now()}`;
 
+  // Adding a URL that discovery already found used to hit `@@unique([sourceUrl,
+  // userId])` on a bare `create` and surface as an unhandled 500. Checking here
+  // rather than catching P2002 later also skips the page fetch and the
+  // extraction model call entirely.
+  if (url) {
+    const existing = await prisma.job.findUnique({
+      where: { sourceUrl_userId: { sourceUrl, userId: user.id } },
+      select: { ...JOB_CLIENT_SELECT, evaluation: { select: { overallScore: true } } },
+    });
+    if (existing) {
+      return NextResponse.json({ job: existing, alreadyExists: true });
+    }
+  }
+
   // Fetch + strip HTML if URL provided
   if (url) {
     try {
@@ -82,6 +97,10 @@ ${textContent}`,
       salaryMax: fields.salaryMax,
       remote: fields.remote,
       userId: user.id,
+      dedupeKey: dedupeKeyFor(fields),
+      // Adding a job by hand is an explicit request for it. Never let the
+      // target-role prefilter exclude it from scoring.
+      prefMatch: true,
     },
   });
 
@@ -99,8 +118,11 @@ ${textContent}`,
       readJobPreferences(user.preferences),
       creds.ai.flashModel
     );
-    evaluation = await prisma.jobEvaluation.create({
-      data: {
+    // upsert, not create: `JobEvaluation.jobId` is unique, so a concurrent
+    // scoring pass reaching this job first would make a bare create throw.
+    evaluation = await prisma.jobEvaluation.upsert({
+      where: { jobId: job.id },
+      create: {
         jobId: job.id,
         userId: user.id,
         overallScore: score.overallScore,
@@ -108,6 +130,7 @@ ${textContent}`,
         archetype: score.archetype,
         blockA: { reason: score.reason },
       },
+      update: {},
     });
   }
 

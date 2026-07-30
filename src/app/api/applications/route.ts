@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { JOB_CLIENT_SELECT } from "@/lib/job-select";
 import { parseBody } from "@/lib/validation";
 import { getOrSeedStages, isValidStageKey } from "@/lib/stages";
 
@@ -24,7 +25,7 @@ export async function GET() {
 
   const applications = await prisma.application.findMany({
     where: { userId: user.id },
-    include: { job: { include: { evaluation: true } } },
+    include: { job: { select: JOB_CLIENT_SELECT } },
     orderBy: { lastActivityAt: "desc" },
   });
 
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       stage,
       lastActivityAt: new Date(),
     },
-    include: { job: true },
+    include: { job: { select: JOB_CLIENT_SELECT } },
   });
 
   return NextResponse.json({ application }, { status: 201 });

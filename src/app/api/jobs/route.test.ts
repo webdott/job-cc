@@ -75,6 +75,98 @@ describe("GET /api/jobs", () => {
     expect(body.total).toBe(3);
   });
 
+  describe("minScore", () => {
+    async function seedScored(userId: string) {
+      for (const [slug, score] of [
+        ["high", 90],
+        ["low", 20],
+      ] as const) {
+        const j = await createJob(userId, slug, { prefMatch: true });
+        await prisma.jobEvaluation.create({
+          data: { jobId: j.id, userId, overallScore: score },
+        });
+      }
+      await createJob(userId, "unscored", { prefMatch: true });
+    }
+
+    it("filters out jobs below the threshold", async () => {
+      const user = await createTestUser();
+      mockAuth.mockResolvedValue({ userId: user.clerkId });
+      await seedScored(user.id);
+
+      const body = await (await GET(listRequest("?minScore=50"))).json();
+      const titles = body.jobs.map((j: { title: string }) => j.title).sort();
+
+      expect(titles).not.toContain("Job low");
+      expect(titles).toContain("Job high");
+    });
+
+    it("keeps unscored jobs visible — they're pending, not zero", async () => {
+      // The old `(overallScore ?? 0) >= minScore` made everything still in the
+      // scoring queue vanish the moment the slider left 0, which now happens
+      // constantly because scoring is asynchronous.
+      const user = await createTestUser();
+      mockAuth.mockResolvedValue({ userId: user.clerkId });
+      await seedScored(user.id);
+
+      const body = await (await GET(listRequest("?minScore=50"))).json();
+      const titles = body.jobs.map((j: { title: string }) => j.title);
+
+      expect(titles).toContain("Job unscored");
+      expect(body.total).toBe(2);
+    });
+  });
+
+  it("sorts by score with unscored jobs last", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+
+    const unscored = await createJob(user.id, "unscored", { prefMatch: true });
+    const mid = await createJob(user.id, "mid", { prefMatch: true });
+    const top = await createJob(user.id, "top", { prefMatch: true });
+    await prisma.jobEvaluation.create({
+      data: { jobId: mid.id, userId: user.id, overallScore: 55 },
+    });
+    await prisma.jobEvaluation.create({
+      data: { jobId: top.id, userId: user.id, overallScore: 95 },
+    });
+
+    const body = await (await GET(listRequest("?sortBy=score"))).json();
+
+    expect(body.jobs.map((j: { id: string }) => j.id)).toEqual([top.id, mid.id, unscored.id]);
+  });
+
+  it("paginates in SQL rather than slicing the whole table", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    for (let i = 0; i < 25; i++) await createJob(user.id, `j${i}`, { prefMatch: true });
+
+    const first = await (await GET(listRequest("?page=1"))).json();
+    expect(first.jobs).toHaveLength(20);
+    expect(first.total).toBe(25);
+    expect(first.hasMore).toBe(true);
+
+    const second = await (await GET(listRequest("?page=2"))).json();
+    expect(second.jobs).toHaveLength(5);
+    expect(second.hasMore).toBe(false);
+
+    const firstIds = new Set(first.jobs.map((j: { id: string }) => j.id));
+    expect(second.jobs.some((j: { id: string }) => firstIds.has(j.id))).toBe(false);
+  });
+
+  it("does not ship internal columns to the client", async () => {
+    const user = await createTestUser();
+    mockAuth.mockResolvedValue({ userId: user.clerkId });
+    await createJob(user.id, "1", { prefMatch: true, dedupeKey: "acme|job", scoreAttempts: 2 });
+
+    const body = await (await GET(listRequest())).json();
+
+    expect(body.jobs[0]).not.toHaveProperty("userId");
+    expect(body.jobs[0]).not.toHaveProperty("dedupeKey");
+    expect(body.jobs[0]).not.toHaveProperty("scoreAttempts");
+    expect(body.jobs[0]).not.toHaveProperty("sourceId");
+  });
+
   it("never returns another user's jobs", async () => {
     const user = await createTestUser();
     const other = await createTestUser();

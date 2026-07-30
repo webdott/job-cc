@@ -1,23 +1,8 @@
-export interface JobEvaluation {
-  overallScore: number | null;
-  recommendation: string | null;
-  blockA?: { summary?: string; reason?: string } | null;
-  blockB?: { strengths?: string[]; gaps?: string[] } | null;
-}
+// Single source of truth for the wire format; see src/types/client.ts.
+import type { ClientJob, ClientJobEvaluation } from "@/types/client";
 
-export interface Job {
-  id: string;
-  title: string;
-  company: string;
-  location: string | null;
-  remote: boolean;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  description: string;
-  sourceUrl: string;
-  fetchedAt: string;
-  evaluation: JobEvaluation | null;
-}
+export type Job = ClientJob;
+export type JobEvaluation = ClientJobEvaluation;
 
 export interface JobsResponse {
   jobs: Job[];

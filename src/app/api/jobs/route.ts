@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validation";
 import { PREF_MATCH_ELIGIBLE } from "@/lib/score-queue";
+import { JOB_CLIENT_SELECT } from "@/lib/job-select";
 
 const DeleteJobSchema = z.object({
   id: z.string().min(1),
@@ -25,42 +27,46 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const skip = (page - 1) * PAGE_SIZE;
 
-  const where = {
-    userId: user.id,
-    ...(remoteOnly ? { remote: true } : {}),
-    // Hidden by default: jobs that scored below the threshold, and jobs that
-    // don't match the user's target roles. Both stay reachable via
-    // ?showArchived=true so nothing is invisible AND unrecoverable.
-    ...(showArchived ? {} : { status: { not: "ARCHIVED" as const }, OR: PREF_MATCH_ELIGIBLE }),
-  };
+  // Built as an AND list because several clauses each need their own OR.
+  const conditions: Prisma.JobWhereInput[] = [
+    { userId: user.id },
+    ...(remoteOnly ? [{ remote: true }] : []),
+  ];
 
-  // Fetch all matching jobs (we need to sort by score after join)
-  const allJobs = await prisma.job.findMany({
-    where,
-    include: { evaluation: true },
-    orderBy: { fetchedAt: "desc" },
-  });
+  // Hidden by default: jobs that scored below the threshold, and jobs that
+  // don't match the user's target roles. Both stay reachable via
+  // ?showArchived=true so nothing is invisible AND unrecoverable.
+  if (!showArchived) {
+    conditions.push({ status: { not: "ARCHIVED" } }, { OR: PREF_MATCH_ELIGIBLE });
+  }
 
-  type JobItem = (typeof allJobs)[number];
+  if (minScore !== undefined && minScore > 0) {
+    // An unscored job is pending, not a zero. The previous
+    // `(overallScore ?? 0) >= minScore` made every job still in the scoring
+    // queue disappear the moment the slider left 0, which now happens
+    // constantly because scoring is asynchronous.
+    conditions.push({
+      OR: [{ evaluation: { overallScore: { gte: minScore } } }, { evaluation: { is: null } }],
+    });
+  }
 
-  // Filter by minScore
-  const filtered = minScore
-    ? allJobs.filter((j: JobItem) => (j.evaluation?.overallScore ?? 0) >= minScore)
-    : allJobs;
+  const where: Prisma.JobWhereInput = { AND: conditions };
 
-  // Sort
-  const sorted =
+  const orderBy: Prisma.JobOrderByWithRelationInput[] =
     sortBy === "score"
-      ? [...filtered].sort(
-          (a, b) => (b.evaluation?.overallScore ?? -1) - (a.evaluation?.overallScore ?? -1)
-        )
-      : filtered; // already sorted by fetchedAt desc from Prisma
+      ? // Unscored jobs sort last rather than first, which is what Postgres
+        // would otherwise do with NULLs on a DESC ordering.
+        [{ evaluation: { overallScore: { sort: "desc", nulls: "last" } } }, { fetchedAt: "desc" }]
+      : [{ fetchedAt: "desc" }];
 
-  const total = sorted.length;
-  const pageJobs = sorted.slice(skip, skip + PAGE_SIZE);
-  const hasMore = skip + PAGE_SIZE < total;
+  // Previously this loaded every job the user had into memory, then filtered,
+  // sorted and sliced in JS — while advertising pagination.
+  const [total, jobs] = await Promise.all([
+    prisma.job.count({ where }),
+    prisma.job.findMany({ where, select: JOB_CLIENT_SELECT, orderBy, skip, take: PAGE_SIZE }),
+  ]);
 
-  return NextResponse.json({ jobs: pageJobs, hasMore, total, page });
+  return NextResponse.json({ jobs, hasMore: skip + jobs.length < total, total, page });
 }
 
 export async function DELETE(req: NextRequest) {

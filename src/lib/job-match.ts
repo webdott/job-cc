@@ -17,23 +17,12 @@
  * never know it happened. When in doubt, match.
  */
 
-export type WorkType = "Remote" | "Hybrid" | "On-site";
+// Shapes live in a dependency-free leaf module so client components can use
+// them without pulling this file's lookup tables into the browser bundle.
+import { EMPTY_PREFERENCES, type JobPreferences, type WorkType } from "@/types/preferences";
 
-export interface JobPreferences {
-  targetRoles: string[];
-  locations: string[];
-  salaryMin: string;
-  salaryMax: string;
-  workType: WorkType[];
-}
-
-export const EMPTY_PREFERENCES: JobPreferences = {
-  targetRoles: [],
-  locations: [],
-  salaryMin: "",
-  salaryMax: "",
-  workType: [],
-};
+export { EMPTY_PREFERENCES };
+export type { WorkType, JobPreferences };
 
 /** Reads the loosely-typed `User.preferences` Json blob into a known shape. */
 export function readJobPreferences(raw: unknown): JobPreferences {
