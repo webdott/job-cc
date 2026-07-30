@@ -41,7 +41,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   return (
-    <div className="flex h-dvh bg-background text-foreground">
+    <div className="fixed inset-0 flex bg-background text-foreground">
       {/* Sidebar — desktop only */}
       <aside className="hidden md:flex md:flex-col w-60 border-r border-border bg-card shrink-0">
         <div className="h-14 flex items-center px-6 border-b border-border">
@@ -83,7 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-[calc(3rem+theme(spacing.safe-bottom))] md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-[calc(4rem+theme(spacing.safe-bottom))] md:pb-0">
           {/* Enter-only: AnimatePresence mode="wait" can leave App Router navigations stuck blank */}
           <motion.div
             key={pathname}
@@ -96,9 +96,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </motion.div>
         </main>
 
-        {/* Bottom tab bar — mobile only */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-card border-t border-border z-50 pb-safe-bottom">
-          <div className="flex items-center justify-around h-16 px-2">
+        {/* Bottom tab bar — mobile only. pb-safe-bottom paints under the home indicator once the shell fills the WKWebView. */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-border bg-card pb-safe-bottom">
+          <div className="flex h-16 items-center justify-around px-2">
             {navItems.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
