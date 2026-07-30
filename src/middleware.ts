@@ -4,6 +4,10 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/api/webhooks(.*)",
+  "/api/cron(.*)",
+  // Self-invoked background workers. Not Clerk-authed because the caller is
+  // another function, not a browser session — they check CRON_SECRET instead.
+  "/api/internal(.*)",
   "/api/push/subscribe",
 ]);
 

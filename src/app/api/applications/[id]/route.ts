@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { JOB_CLIENT_SELECT } from "@/lib/job-select";
 import { sanitizeJobDescription } from "@/lib/sanitize";
 import { parseBody, dateStringSchema } from "@/lib/validation";
 import { isValidStageKey } from "@/lib/stages";
@@ -32,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const application = await prisma.application.findFirst({
     where: { id: params.id, userId: user.id },
     include: {
-      job: { include: { evaluation: true } },
+      job: { select: JOB_CLIENT_SELECT },
       coverLetter: true,
     },
   });
@@ -82,7 +83,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       lastActivityAt: new Date(),
       timelineEvents: newEvents,
     },
-    include: { job: { include: { evaluation: true } }, coverLetter: true },
+    include: { job: { select: JOB_CLIENT_SELECT }, coverLetter: true },
   });
 
   return NextResponse.json({ application: updated });

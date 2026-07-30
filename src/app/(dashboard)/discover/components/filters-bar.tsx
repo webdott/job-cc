@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Search, Clock, TrendingUp, Wifi, Plus } from "lucide-react";
+import { Search, Clock, TrendingUp, Wifi, Plus, EyeOff } from "lucide-react";
 
 export function FiltersBar({
   minScore,
@@ -10,6 +10,8 @@ export function FiltersBar({
   onSortByChange,
   remoteOnly,
   onToggleRemoteOnly,
+  showArchived,
+  onToggleShowArchived,
   onToggleManual,
 }: {
   minScore: number;
@@ -18,6 +20,8 @@ export function FiltersBar({
   onSortByChange: (value: "newest" | "score") => void;
   remoteOnly: boolean;
   onToggleRemoteOnly: () => void;
+  showArchived: boolean;
+  onToggleShowArchived: () => void;
   onToggleManual: () => void;
 }) {
   return (
@@ -71,6 +75,22 @@ export function FiltersBar({
       >
         <Wifi className="h-3.5 w-3.5" />
         Remote
+      </button>
+
+      {/* Escape hatch for anything the prefilter or the score threshold hid, so
+          no job is ever invisible and unreachable. */}
+      <button
+        onClick={onToggleShowArchived}
+        title="Include jobs that don't match your target roles or scored too low"
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+          showArchived
+            ? "bg-blue-500/20 border-blue-500/30 text-blue-400"
+            : "bg-muted border-border text-muted-foreground"
+        )}
+      >
+        <EyeOff className="h-3.5 w-3.5" />
+        Show skipped
       </button>
 
       <button

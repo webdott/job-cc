@@ -1,3 +1,5 @@
+import type { ClientJob } from "@/types/client";
+
 export interface TimelineEvent {
   type: string;
   stage?: string;
@@ -27,18 +29,8 @@ export interface JobEvaluation {
   blockB?: { strengths?: string[]; gaps?: string[] } | null;
 }
 
-export interface Job {
-  id: string;
-  title: string;
-  company: string;
-  location: string | null;
-  remote: boolean;
-  description: string;
-  sourceUrl: string;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  evaluation: JobEvaluation | null;
-}
+// Single source of truth for the wire format; see src/types/client.ts.
+export type Job = ClientJob;
 
 export interface Application {
   id: string;

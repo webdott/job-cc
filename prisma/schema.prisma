@@ -82,19 +82,45 @@ model Resume {
 }
 
 model Job {
-  id           String         @id @default(cuid())
-  sourceUrl    String
-  sourceId     String?
-  title        String
-  company      String
-  location     String?
-  description  String
-  salaryMin    Int?
-  salaryMax    Int?
-  remote       Boolean        @default(false)
-  postedAt     DateTime?
-  fetchedAt    DateTime       @default(now())
-  status       JobStatus      @default(UNSEEN)
+  id          String    @id @default(cuid())
+  sourceUrl   String
+  sourceId    String?
+  title       String
+  company     String
+  location    String?
+  description String
+  salaryMin   Int?
+  salaryMax   Int?
+  remote      Boolean   @default(false)
+  postedAt    DateTime?
+  fetchedAt   DateTime  @default(now())
+  status      JobStatus @default(UNSEEN)
+
+  /// Number of *permanent* scoring failures (bad model output, 4xx). Transient
+  /// failures (429/5xx) deliberately do not increment this. A job leaves the
+  /// scoring queue at MAX_SCORE_ATTEMPTS so one malformed description can't
+  /// block the head of the queue forever. See lib/score-queue.ts.
+  scoreAttempts Int     @default(0)
+  scoreError    String?
+
+  /// Normalized "company|title", used to collapse the same role appearing on
+  /// more than one source under different URLs. Indexed but deliberately NOT
+  /// unique: HN titles are parsed heuristically, and a bad parse must not be
+  /// able to permanently block a legitimate posting. Null when either side
+  /// normalized to nothing. See lib/job-match.ts.
+  dedupeKey String?
+
+  /// Whether this job matched the user's targetRoles when it was ingested.
+  /// null = never evaluated (ingested before filtering existed) and treated as
+  /// eligible. Recomputed when job preferences change, so narrowing or
+  /// broadening targetRoles both take effect on unscored jobs.
+  prefMatch Boolean?
+
+  /// Why the job was archived: "low_score" | "user". Low scorers keep their row
+  /// as a tombstone — deleting would let the next ingest re-insert and re-score
+  /// them every night — but their description is blanked to reclaim the space.
+  archivedReason String?
+
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   evaluation   JobEvaluation?
@@ -102,6 +128,10 @@ model Job {
   pdfExports   PdfExport[]
 
   @@unique([sourceUrl, userId])
+  // Drives the scoring queue and the discover list, both of which filter on
+  // userId + status + prefMatch and order by fetchedAt.
+  @@index([userId, status, prefMatch, fetchedAt])
+  @@index([userId, dedupeKey])
 }
 
 model JobEvaluation {
@@ -144,6 +174,10 @@ model Application {
   evaluation     JobEvaluation? @relation(fields: [evaluationId], references: [id])
   pdfExports     PdfExport[]
   createdAt      DateTime       @default(now())
+
+  // The reminders cron scans for due follow-ups across all users; without this
+  // it is a full table scan.
+  @@index([followUpAt, stage])
 }
 
 model CoverLetter {

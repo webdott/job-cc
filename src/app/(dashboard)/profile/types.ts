@@ -1,28 +1,14 @@
+// Shared with the onboarding flow and the server matcher; see
+// src/types/preferences.ts and src/types/forms.ts.
 import type { AiProviderId } from "@/lib/ai-providers";
+import type { JobPreferences, NotificationPrefs } from "@/types/preferences";
 
-export type WorkType = "Remote" | "Hybrid" | "On-site";
+export type { WorkType, NotificationPrefs } from "@/types/preferences";
+export { DEFAULT_NOTIFICATION_PREFS } from "@/types/preferences";
+export type { ByocForm } from "@/types/forms";
+export { EMPTY_BYOC_FORM } from "@/types/forms";
 
-export interface Preferences {
-  targetRoles: string[];
-  locations: string[];
-  salaryMin: string;
-  salaryMax: string;
-  workType: WorkType[];
-}
-
-export interface NotificationPrefs {
-  jobMatches: boolean;
-  followUpReminders: boolean;
-  quietHoursStart: string;
-  quietHoursEnd: string;
-}
-
-export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
-  jobMatches: true,
-  followUpReminders: true,
-  quietHoursStart: "",
-  quietHoursEnd: "",
-};
+export type Preferences = JobPreferences;
 
 export interface PreferencesResponse {
   preferences?: Partial<Preferences> & { notifications?: Partial<NotificationPrefs> };
@@ -65,27 +51,3 @@ export interface CredentialsStatus {
   aiProvider: AiProviderId | null;
   verifiedAt: string | null;
 }
-
-export interface ByocForm {
-  aiProvider: AiProviderId;
-  aiApiKey: string;
-  r2AccountId: string;
-  r2AccessKeyId: string;
-  r2SecretAccessKey: string;
-  r2BucketName: string;
-  r2PublicUrl: string;
-  brevoApiKey: string;
-  brevoFromEmail: string;
-}
-
-export const EMPTY_BYOC_FORM: ByocForm = {
-  aiProvider: "GOOGLE",
-  aiApiKey: "",
-  r2AccountId: "",
-  r2AccessKeyId: "",
-  r2SecretAccessKey: "",
-  r2BucketName: "",
-  r2PublicUrl: "",
-  brevoApiKey: "",
-  brevoFromEmail: "",
-};

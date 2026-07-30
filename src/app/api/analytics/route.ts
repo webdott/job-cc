@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import type { ParsedResume } from "@/lib/resume-parser";
+import { getOrSeedStages } from "@/lib/stages";
+import { INACTIVE_STAGE_KEYS } from "@/lib/stage-constants";
 import { COMMON_SKILLS } from "@/lib/skills-taxonomy";
 
 const TOP_SKILLS_LIMIT = 10;
@@ -26,51 +28,56 @@ export async function GET() {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ stats: null });
 
-  const [applications, activeResume] = await Promise.all([
+  const [applications, activeResume, stages] = await Promise.all([
     prisma.application.findMany({
       where: { userId: user.id },
       include: { job: { include: { evaluation: true } }, evaluation: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.resume.findFirst({ where: { userId: user.id, isActive: true } }),
+    // Stages are user-customizable (lib/stages.ts). The funnel used to filter
+    // against six hardcoded strings, so anyone who renamed or added a column
+    // silently dropped out of their own analytics.
+    getOrSeedStages(user.id),
   ]);
 
   type App = (typeof applications)[number];
 
+  const countIn = (keys: string[]) =>
+    applications.filter((a: App) => keys.includes(a.stage)).length;
+
+  const stageKeys = stages.map((s) => s.key);
+  const firstStage = stageKeys[0];
+
+  // "Responded" and "interviews" are positions in the pipeline rather than
+  // fixed names: anything past the point of applying counts as a response.
+  const appliedIndex = stageKeys.indexOf("Applied");
+  const respondedFrom = appliedIndex >= 0 ? appliedIndex + 1 : 2;
+  const respondedKeys = [...stageKeys.slice(respondedFrom), "Rejected"];
+  const interviewIndex = stageKeys.indexOf("Interview");
+  const interviewKeys = interviewIndex >= 0 ? stageKeys.slice(interviewIndex) : [];
+
   const total = applications.length;
-  const applied = applications.filter((a: App) => a.stage !== "Saved").length;
-  const responded = applications.filter((a: App) =>
-    ["Screening", "Interview", "Offer", "Rejected"].includes(a.stage)
-  ).length;
-  const interviews = applications.filter((a: App) =>
-    ["Interview", "Offer"].includes(a.stage)
-  ).length;
-  const offers = applications.filter((a: App) => a.stage === "Offer").length;
-  const rejected = applications.filter((a: App) => a.stage === "Rejected").length;
+  const applied = applications.filter((a: App) => a.stage !== firstStage).length;
+  const responded = countIn(Array.from(new Set(respondedKeys)));
+  const interviews = countIn(interviewKeys);
+  // Offers and rejections are outcomes rather than columns, so they stay
+  // matched by name. A user who renames these two stages will see zeroes here;
+  // fixing that properly needs an outcome flag on Stage rather than inferring
+  // meaning from a label.
+  const offers = countIn(["Offer"]);
+  const rejected = countIn(["Rejected"]);
 
   const responseRate = applied > 0 ? Math.round((responded / applied) * 100) : 0;
   const interviewRate = responded > 0 ? Math.round((interviews / responded) * 100) : 0;
 
-  // Stage funnel
+  // One bar per stage the user actually has, in their own order, plus any
+  // inactive outcome that has applications in it.
   const funnel = [
-    {
-      stage: "Saved",
-      count: applications.filter((a: App) => a.stage === "Saved").length,
-    },
-    {
-      stage: "Applied",
-      count: applications.filter((a: App) => a.stage === "Applied").length,
-    },
-    {
-      stage: "Screening",
-      count: applications.filter((a: App) => a.stage === "Screening").length,
-    },
-    {
-      stage: "Interview",
-      count: applications.filter((a: App) => a.stage === "Interview").length,
-    },
-    { stage: "Offer", count: offers },
-    { stage: "Rejected", count: rejected },
+    ...stages.map((s) => ({ stage: s.label, count: countIn([s.key]) })),
+    ...INACTIVE_STAGE_KEYS.map((key) => ({ stage: key, count: countIn([key]) })).filter(
+      (entry) => entry.count > 0
+    ),
   ];
 
   // Applications by day of week
@@ -92,13 +99,11 @@ export async function GET() {
       week: label,
       applied: applications.filter((a: App) => {
         const d = new Date(a.createdAt);
-        return d >= weekStart && d < weekEnd && a.stage !== "Saved";
+        return d >= weekStart && d < weekEnd && a.stage !== firstStage;
       }).length,
       responses: applications.filter((a: App) => {
         const d = new Date(a.lastActivityAt);
-        return (
-          d >= weekStart && d < weekEnd && ["Screening", "Interview", "Offer"].includes(a.stage)
-        );
+        return d >= weekStart && d < weekEnd && respondedKeys.includes(a.stage);
       }).length,
     };
   });

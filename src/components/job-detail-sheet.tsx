@@ -17,27 +17,7 @@ import {
 import { useState } from "react";
 import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
 import { JobDescription } from "@/components/application-detail/shared";
-
-interface JobEvaluation {
-  overallScore: number | null;
-  recommendation: string | null;
-  blockA?: { summary?: string; reason?: string } | null;
-  blockB?: { strengths?: string[]; gaps?: string[] } | null;
-}
-
-interface Job {
-  id: string;
-  title: string;
-  company: string;
-  location: string | null;
-  remote: boolean;
-  description: string;
-  sourceUrl: string;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  fetchedAt: string;
-  evaluation: JobEvaluation | null;
-}
+import type { ClientJob as Job } from "@/types/client";
 
 interface JobDetailSheetProps {
   job: Job | null;

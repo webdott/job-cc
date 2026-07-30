@@ -1,142 +1,22 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { scoreJob } from "@/lib/job-scorer";
-import type { ParsedResume } from "@/lib/resume-parser";
-import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
 import { requireUserCredentials } from "@/lib/byoc";
-import { parseHNListing, HN_LOW_CONFIDENCE_NOTICE } from "@/lib/hn-job-parser";
+import { fetchAllSources } from "@/lib/job-sources";
+import { ingestJobsForUser } from "@/lib/job-ingest";
+import { readJobPreferences } from "@/lib/job-match";
+import { countQueued } from "@/lib/score-queue";
 
-interface RemotiveJob {
-  id: number;
-  url: string;
-  title: string;
-  company_name: string;
-  candidate_required_location: string;
-  description: string;
-  salary: string;
-  publication_date: string;
-}
-
-interface ArbeitnowJob {
-  slug: string;
-  url: string;
-  title: string;
-  company_name: string;
-  location: string;
-  description: string;
-  remote: boolean;
-  published_at: string;
-}
-
-interface HNStory {
-  hits: Array<{ objectID: string }>;
-}
-
-interface HNItem {
-  children: Array<{ text: string; objectID: string }>;
-}
-
-async function fetchRemotive() {
-  try {
-    const res = await fetch("https://remotive.com/api/remote-jobs?limit=100", {
-      next: { revalidate: 3600 },
-    });
-    const data = (await res.json()) as { jobs: RemotiveJob[] };
-    return (data.jobs ?? []).map((j: RemotiveJob) => ({
-      sourceUrl: j.url,
-      sourceId: `remotive-${j.id}`,
-      title: j.title,
-      company: j.company_name,
-      location: j.candidate_required_location || "Remote",
-      description: sanitizeJobDescription(j.description),
-      remote: true,
-      postedAt: validDate(j.publication_date),
-    }));
-  } catch {
-    return [];
-  }
-}
-
-function validDate(raw: string | number | undefined): Date | null {
-  if (!raw) return null;
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-// Arbeitnow's API is genuinely paginated (`links.next` points at the next
-// page). Follow it instead of slicing a single page, capped so a scan
-// doesn't balloon into hundreds of jobs needing per-job AI scoring.
-const ARBEITNOW_CAP = 60;
-const ARBEITNOW_MAX_PAGES = 3;
-
-async function fetchArbeitnow() {
-  const jobs: ArbeitnowJob[] = [];
-  let url: string | null = "https://www.arbeitnow.com/api/job-board-api";
-
-  for (let page = 0; url && page < ARBEITNOW_MAX_PAGES && jobs.length < ARBEITNOW_CAP; page++) {
-    try {
-      const res = await fetch(url, { next: { revalidate: 3600 } });
-      const data = (await res.json()) as {
-        data: ArbeitnowJob[];
-        links?: { next?: string | null };
-      };
-      jobs.push(...(data.data ?? []));
-      url = data.links?.next ?? null;
-    } catch {
-      break; // keep whatever pages were already fetched
-    }
-  }
-
-  return jobs.slice(0, ARBEITNOW_CAP).map((j: ArbeitnowJob) => ({
-    sourceUrl: j.url,
-    sourceId: `arbeitnow-${j.slug}`,
-    title: j.title,
-    company: j.company_name,
-    location: j.location,
-    description: stripToPlainText(j.description),
-    remote: j.remote ?? false,
-    postedAt: validDate(String(j.published_at)),
-  }));
-}
-
-async function fetchHNHiring() {
-  try {
-    // Find latest "Ask HN: Who's Hiring" thread
-    const searchRes = await fetch(
-      "https://hn.algolia.com/api/v1/search?query=Ask+HN+Who+is+hiring&tags=story,ask_hn&hitsPerPage=1"
-    );
-    const searchData = (await searchRes.json()) as HNStory;
-    const storyId = searchData.hits?.[0]?.objectID;
-    if (!storyId) return [];
-
-    const storyRes = await fetch(`https://hn.algolia.com/api/v1/items/${storyId}`);
-    const story = (await storyRes.json()) as HNItem;
-
-    return (story.children ?? [])
-      .slice(0, 20)
-      .map((comment: { text: string; objectID: string }) => {
-        const text = stripToPlainText(comment.text ?? "");
-        const parsed = parseHNListing(text);
-        const description = parsed.lowConfidence
-          ? `${HN_LOW_CONFIDENCE_NOTICE}\n\n${text}`.slice(0, 2000)
-          : text.slice(0, 2000);
-
-        return {
-          sourceUrl: `https://news.ycombinator.com/item?id=${comment.objectID}`,
-          sourceId: `hn-${comment.objectID}`,
-          title: parsed.title,
-          company: parsed.company,
-          location: parsed.location,
-          description,
-          remote: text.toLowerCase().includes("remote"),
-          postedAt: new Date(),
-        };
-      });
-  } catch {
-    return [];
-  }
-}
+/**
+ * Ingest-only. Fetches the three sources, bulk-inserts what's new, and reports
+ * how much is now waiting to be scored.
+ *
+ * Scoring used to happen here, sequentially, one model call per job — up to 180
+ * of them, which is roughly twelve minutes of work inside a request that gets
+ * killed at five. The client now drains the queue in chunks via
+ * /api/jobs/score-batch, so this returns in seconds and a scan survives being
+ * interrupted.
+ */
 
 export async function POST() {
   const { userId: clerkId } = await auth();
@@ -145,63 +25,19 @@ export async function POST() {
   const user = await prisma.user.findUnique({ where: { clerkId } });
   if (!user) return NextResponse.json({ error: "Complete onboarding first" }, { status: 400 });
 
-  const { data: creds, error: credError } = await requireUserCredentials(user.email, user.id);
+  // No AI call happens here any more, but keep the gate: without credentials the
+  // jobs we ingest could never be scored, so failing now is clearer than
+  // silently filling the queue.
+  const { error: credError } = await requireUserCredentials(user.email, user.id);
   if (credError) return credError;
 
-  // Get active resume for scoring
-  const activeResume = await prisma.resume.findFirst({
-    where: { userId: user.id, isActive: true },
-  });
+  const sourceJobs = await fetchAllSources();
+  const { discovered, filtered } = await ingestJobsForUser(
+    user.id,
+    sourceJobs,
+    readJobPreferences(user.preferences)
+  );
+  const remainingToScore = await countQueued(user.id);
 
-  // Fetch all sources in parallel
-  const [remotive, arbeitnow, hn] = await Promise.all([
-    fetchRemotive(),
-    fetchArbeitnow(),
-    fetchHNHiring(),
-  ]);
-
-  const allJobs = [...remotive, ...arbeitnow, ...hn];
-  let discovered = 0;
-  let scored = 0;
-  const savedJobs = [];
-
-  for (const jobData of allJobs) {
-    // Upsert job (skip duplicates)
-    const job = await prisma.job.upsert({
-      where: { sourceUrl_userId: { sourceUrl: jobData.sourceUrl, userId: user.id } },
-      create: { ...jobData, userId: user.id },
-      update: {},
-    });
-
-    const isNew = job.fetchedAt > new Date(Date.now() - 5000); // created in last 5s
-    if (isNew) discovered++;
-
-    // Score if we have a resume and no existing evaluation
-    if (activeResume && isNew) {
-      try {
-        const parsedData = activeResume.parsedData as ParsedResume;
-        const score = await scoreJob(job.description, job.title, parsedData, creds.ai.flashModel);
-
-        await prisma.jobEvaluation.upsert({
-          where: { jobId: job.id },
-          create: {
-            jobId: job.id,
-            userId: user.id,
-            overallScore: score.overallScore,
-            recommendation: score.recommendation,
-            archetype: score.archetype,
-            blockA: { reason: score.reason },
-          },
-          update: {},
-        });
-        scored++;
-      } catch {
-        // Scoring failed for this job — continue
-      }
-    }
-
-    savedJobs.push(job);
-  }
-
-  return NextResponse.json({ discovered, scored, total: allJobs.length });
+  return NextResponse.json({ discovered, filtered, remainingToScore, total: sourceJobs.length });
 }
