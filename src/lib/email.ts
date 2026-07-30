@@ -7,8 +7,8 @@ interface SendTransactionalEmailInput extends EmailCredentials {
   toEmail: string;
   subject: string;
   textContent: string;
-  /** Absolute or app-relative URL included in the plain-text body when present. */
-  url?: string;
+  /** Optional HTML body. When set, Brevo sends multipart text + HTML. */
+  htmlContent?: string;
 }
 
 /**
@@ -47,18 +47,8 @@ export async function sendTransactionalEmail({
   toEmail,
   subject,
   textContent,
-  url,
+  htmlContent,
 }: SendTransactionalEmailInput): Promise<void> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
-  const absoluteUrl =
-    url && (url.startsWith("http://") || url.startsWith("https://"))
-      ? url
-      : url && appUrl
-        ? `${appUrl}${url.startsWith("/") ? url : `/${url}`}`
-        : undefined;
-
-  const bodyText = absoluteUrl ? `${textContent}\n\nOpen in JobCC: ${absoluteUrl}` : textContent;
-
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
@@ -70,7 +60,8 @@ export async function sendTransactionalEmail({
       sender: { name: "Job Command Center", email: fromEmail },
       to: [{ email: toEmail }],
       subject,
-      textContent: bodyText,
+      textContent,
+      ...(htmlContent ? { htmlContent } : {}),
     }),
   });
 

@@ -75,6 +75,13 @@ describe("notifyUser", () => {
     expect(result.emailed).toBe(true);
     expect(prisma.notification.create).toHaveBeenCalledTimes(1);
     expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "New match",
+        textContent: expect.stringContaining("A job matched your resume"),
+        htmlContent: expect.stringContaining("View matches"),
+      })
+    );
   });
 
   it("records the notification and emails but skips push when inside quiet hours", async () => {
