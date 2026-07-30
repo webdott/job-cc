@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { scoreJob } from "@/lib/job-scorer";
+import { readJobPreferences } from "@/lib/job-match";
 import type { ParsedResume } from "@/lib/resume-parser";
 import * as cheerio from "cheerio";
 import { stripToPlainText } from "@/lib/sanitize";
@@ -92,7 +93,12 @@ ${textContent}`,
 
   if (activeResume) {
     const parsedData = activeResume.parsedData as ParsedResume;
-    const score = await scoreJob(job.description, job.title, parsedData, creds.ai.flashModel);
+    const score = await scoreJob(
+      job,
+      parsedData,
+      readJobPreferences(user.preferences),
+      creds.ai.flashModel
+    );
     evaluation = await prisma.jobEvaluation.create({
       data: {
         jobId: job.id,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireCronSecret } from "@/lib/cron-auth";
 import { fetchAllSources } from "@/lib/job-sources";
 import { ingestJobsForUser } from "@/lib/job-ingest";
+import { readJobPreferences } from "@/lib/job-match";
 import { acquireLock, releaseLock } from "@/lib/run-lock";
 import { triggerScoreDrain } from "@/lib/drain-trigger";
 
@@ -37,16 +38,22 @@ export async function GET(req: NextRequest) {
 
     const users = await prisma.user.findMany({
       where: { resumes: { some: { isActive: true } } },
-      select: { id: true },
+      select: { id: true, preferences: true },
     });
 
     let discovered = 0;
+    let filtered = 0;
     let usersProcessed = 0;
 
     for (const user of users) {
       try {
-        const result = await ingestJobsForUser(user.id, sourceJobs);
+        const result = await ingestJobsForUser(
+          user.id,
+          sourceJobs,
+          readJobPreferences(user.preferences)
+        );
         discovered += result.discovered;
+        filtered += result.filtered;
         usersProcessed++;
       } catch (err) {
         // A single user's insert failing must not abort ingestion for the rest.
@@ -61,6 +68,7 @@ export async function GET(req: NextRequest) {
       sourceJobs: sourceJobs.length,
       usersProcessed,
       discovered,
+      filtered,
       drainStarted,
     });
   } finally {

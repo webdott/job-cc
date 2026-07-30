@@ -9,6 +9,7 @@ import {
   listUsersWithQueuedJobs,
   scoreQueuedForUser,
   MAX_SCORE_ATTEMPTS,
+  LOW_SCORE_THRESHOLD,
 } from "@/lib/score-queue";
 
 vi.mock("@/lib/job-scorer", () => ({ scoreJob: vi.fn() }));
@@ -245,5 +246,113 @@ describe("scoreQueuedForUser", () => {
     expect(outcome.scored).toBe(0);
     expect(outcome.remaining).toBe(1);
     expect(mockScoreJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("preference eligibility", () => {
+  it("queues jobs that matched the user's target roles", async () => {
+    const user = await userWithResume();
+    await createJob(user.id, 1, { prefMatch: true });
+
+    expect(await countQueued(user.id)).toBe(1);
+  });
+
+  it("never queues jobs that were filtered out", async () => {
+    const user = await userWithResume();
+    await createJob(user.id, 1, { prefMatch: false });
+
+    expect(await countQueued(user.id)).toBe(0);
+
+    const outcome = await scoreQueuedForUser(user.id, { take: 10, deadline: FAR_FUTURE() });
+    expect(outcome.scored).toBe(0);
+    expect(mockScoreJob).not.toHaveBeenCalled();
+  });
+
+  it("still queues jobs whose prefMatch was never evaluated", async () => {
+    // Regression: `prefMatch: { not: false }` reads as `prefMatch <> false`,
+    // and SQL's three-valued logic drops NULLs from that — which would strand
+    // every job ingested before preference filtering existed.
+    const user = await userWithResume();
+    await createJob(user.id, 1, { prefMatch: null });
+
+    expect(await countQueued(user.id)).toBe(1);
+
+    const outcome = await scoreQueuedForUser(user.id, { take: 10, deadline: FAR_FUTURE() });
+    expect(outcome.scored).toBe(1);
+  });
+});
+
+describe("low-score archiving", () => {
+  it("archives a job below the threshold and blanks its description", async () => {
+    const user = await userWithResume();
+    await createJob(user.id, 1);
+    mockScoreJob.mockResolvedValue({
+      overallScore: LOW_SCORE_THRESHOLD - 1,
+      recommendation: "SKIP",
+      reason: "Not a fit",
+    });
+
+    const outcome = await scoreQueuedForUser(user.id, { take: 10, deadline: FAR_FUTURE() });
+
+    expect(outcome.scored).toBe(1);
+    expect(outcome.archived).toBe(1);
+
+    const job = await prisma.job.findFirstOrThrow();
+    expect(job.status).toBe("ARCHIVED");
+    expect(job.archivedReason).toBe("low_score");
+    expect(job.description).toBe("");
+    // The evaluation survives, so the score is still inspectable.
+    const evaluation = await prisma.jobEvaluation.findFirstOrThrow();
+    expect(evaluation.overallScore).toBe(LOW_SCORE_THRESHOLD - 1);
+  });
+
+  it("keeps a job exactly at the threshold", async () => {
+    const user = await userWithResume();
+    await createJob(user.id, 1);
+    mockScoreJob.mockResolvedValue({
+      overallScore: LOW_SCORE_THRESHOLD,
+      recommendation: "SKIP",
+      reason: "Borderline",
+    });
+
+    const outcome = await scoreQueuedForUser(user.id, { take: 10, deadline: FAR_FUTURE() });
+
+    expect(outcome.archived).toBe(0);
+    const job = await prisma.job.findFirstOrThrow();
+    expect(job.status).toBe("UNSEEN");
+    expect(job.description).toBe("desc");
+  });
+
+  it("never archives a job the user has applied to", async () => {
+    // Application.jobId is optional, so deleting or gutting the job would
+    // leave a pipeline card with no title, company, or score.
+    const user = await userWithResume();
+    const job = await createJob(user.id, 1);
+    await prisma.application.create({ data: { userId: user.id, jobId: job.id, stage: "Applied" } });
+
+    mockScoreJob.mockResolvedValue({
+      overallScore: 5,
+      recommendation: "SKIP",
+      reason: "Not a fit",
+    });
+
+    const outcome = await scoreQueuedForUser(user.id, { take: 10, deadline: FAR_FUTURE() });
+
+    expect(outcome.scored).toBe(1);
+    expect(outcome.archived).toBe(0);
+
+    const stored = await prisma.job.findFirstOrThrow();
+    expect(stored.status).toBe("UNSEEN");
+    expect(stored.description).toBe("desc");
+  });
+
+  it("does not re-queue an archived job", async () => {
+    const user = await userWithResume();
+    await createJob(user.id, 1);
+    mockScoreJob.mockResolvedValue({ overallScore: 5, recommendation: "SKIP", reason: "No" });
+
+    await scoreQueuedForUser(user.id, { take: 10, deadline: FAR_FUTURE() });
+
+    expect(await countQueued(user.id)).toBe(0);
   });
 });

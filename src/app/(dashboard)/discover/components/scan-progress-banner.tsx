@@ -55,11 +55,28 @@ export function ScanProgressBanner({ progress }: { progress: ScanProgress }) {
         </p>
       )}
 
+      {/* Makes the prefilter visible. Without this, jobs the user could see in
+          the source feeds would simply never appear, with no explanation. */}
+      {progress.filtered > 0 && status !== "error" && (
+        <p className="mt-1 text-xs opacity-80">
+          {progress.filtered} skipped — {didNot(progress.filtered)} match your target roles. Use
+          &ldquo;Show skipped&rdquo; to see them.
+        </p>
+      )}
+
+      {progress.archived > 0 && status !== "error" && (
+        <p className="mt-1 text-xs opacity-80">{progress.archived} hidden for scoring too low.</p>
+      )}
+
       {discovered === 0 && status === "done" && (
         <p className="mt-1 text-xs opacity-80">No new listings since your last scan.</p>
       )}
     </div>
   );
+}
+
+function didNot(count: number): string {
+  return count === 1 ? "it doesn't" : "they don't";
 }
 
 function StatusIcon({ status }: { status: ScanProgress["status"] }) {

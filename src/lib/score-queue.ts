@@ -1,10 +1,11 @@
 import { APICallError, RetryError, NoObjectGeneratedError, TypeValidationError } from "ai";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { scoreJob } from "@/lib/job-scorer";
+import { scoreJob, type ScorableJob } from "@/lib/job-scorer";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { resolveUserCredentials } from "@/lib/byoc";
 import { scoringRatelimit } from "@/lib/rate-limit";
+import { readJobPreferences } from "@/lib/job-match";
 import type { ParsedResume } from "@/lib/resume-parser";
 
 /**
@@ -22,12 +23,33 @@ import type { ParsedResume } from "@/lib/resume-parser";
  * malformed listing can't block the head forever. */
 export const MAX_SCORE_ATTEMPTS = 3;
 
+/**
+ * Jobs scoring below this are archived out of the list.
+ *
+ * Deliberately below the scorer's own SKIP boundary of 40 — this hides things
+ * automatically, so it should only catch jobs that are clearly not worth the
+ * user's attention rather than everything the model merely doubts.
+ */
+export const LOW_SCORE_THRESHOLD = 30;
+
 const SCORE_CONCURRENCY = Number(process.env.SCORE_CONCURRENCY ?? 4);
+
+/**
+ * Matched, or never evaluated. Spelled out as an OR rather than
+ * `{ not: false }` because SQL three-valued logic drops NULLs from a `<> false`
+ * comparison, which would strand every job ingested before preference
+ * filtering existed.
+ */
+export const PREF_MATCH_ELIGIBLE: Prisma.JobWhereInput["OR"] = [
+  { prefMatch: true },
+  { prefMatch: null },
+];
 
 function queuedWhere(userId?: string): Prisma.JobWhereInput {
   return {
     ...(userId ? { userId } : {}),
     status: "UNSEEN",
+    OR: PREF_MATCH_ELIGIBLE,
     evaluation: { is: null },
     scoreAttempts: { lt: MAX_SCORE_ATTEMPTS },
   };
@@ -81,14 +103,12 @@ export function classifyScoreError(err: unknown): "transient" | "permanent" {
   return "permanent";
 }
 
-type JobToScore = {
-  id: string;
-  title: string;
-  description: string;
-};
+type JobToScore = ScorableJob & { id: string };
 
 export interface ScoreOutcome {
   scored: number;
+  /** Of those scored, how many fell below the threshold and were archived. */
+  archived: number;
   /** Permanent failures — these consumed an attempt. */
   failed: number;
   /** Left queued: rate-limited, deadline reached, or a transient error. */
@@ -97,7 +117,7 @@ export interface ScoreOutcome {
   remaining: number;
 }
 
-const EMPTY: Omit<ScoreOutcome, "remaining"> = { scored: 0, failed: 0, deferred: 0 };
+const EMPTY: Omit<ScoreOutcome, "remaining"> = { scored: 0, archived: 0, failed: 0, deferred: 0 };
 
 /**
  * Scores up to `take` of one user's queued jobs, stopping early if `deadline`
@@ -113,7 +133,7 @@ export async function scoreQueuedForUser(
 ): Promise<ScoreOutcome> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, email: true },
+    select: { id: true, email: true, preferences: true },
   });
   if (!user) return { ...EMPTY, remaining: 0 };
 
@@ -132,11 +152,20 @@ export async function scoreQueuedForUser(
     where: queuedWhere(userId),
     orderBy: { fetchedAt: "desc" },
     take: opts.take,
-    select: { id: true, title: true, description: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      location: true,
+      remote: true,
+      salaryMin: true,
+      salaryMax: true,
+    },
   });
   if (jobs.length === 0) return { ...EMPTY, remaining: 0 };
 
   const parsedData = activeResume.parsedData as ParsedResume;
+  const preferences = readJobPreferences(user.preferences);
   const model = credentials.ai.flashModel;
 
   // Set once a worker sees back-pressure or the clock runs out; every other
@@ -146,7 +175,7 @@ export async function scoreQueuedForUser(
   const results = await mapWithConcurrency(
     jobs,
     SCORE_CONCURRENCY,
-    async (job: JobToScore): Promise<"scored" | "failed" | "deferred"> => {
+    async (job: JobToScore): Promise<"scored" | "archived" | "failed" | "deferred"> => {
       if (stop || Date.now() >= opts.deadline) return "deferred";
 
       const { success } = await scoringRatelimit.limit(userId).catch(() => ({ success: true }));
@@ -156,7 +185,7 @@ export async function scoreQueuedForUser(
       }
 
       try {
-        const score = await scoreJob(job.description, job.title, parsedData, model);
+        const score = await scoreJob(job, parsedData, preferences, model);
 
         await prisma.jobEvaluation.upsert({
           where: { jobId: job.id },
@@ -170,6 +199,10 @@ export async function scoreQueuedForUser(
           },
           update: {},
         });
+
+        if (score.overallScore < LOW_SCORE_THRESHOLD) {
+          return (await archiveLowScore(job.id)) ? "archived" : "scored";
+        }
         return "scored";
       } catch (err) {
         if (classifyScoreError(err) === "transient") {
@@ -182,12 +215,41 @@ export async function scoreQueuedForUser(
     }
   );
 
+  const archived = results.filter((r) => r === "archived").length;
+
   return {
-    scored: results.filter((r) => r === "scored").length,
+    // Archived jobs were scored too — they just didn't survive the threshold.
+    scored: results.filter((r) => r === "scored").length + archived,
+    archived,
     failed: results.filter((r) => r === "failed").length,
     deferred: results.filter((r) => r === "deferred").length,
     remaining: await countQueued(userId),
   };
+}
+
+/**
+ * Hides a job that scored too low to be worth showing, and blanks its
+ * description to reclaim the only large column on the row.
+ *
+ * The row itself is kept deliberately. Deleting it would free its sourceUrl,
+ * so the next ingest would re-insert the same job, spend another model call
+ * rejecting it, and delete it again — every night, forever. Low scorers are the
+ * bulk of the feed, so that would become most of the AI spend.
+ *
+ * Never touches a job with an attached Application: `Application.jobId` is
+ * optional, so Prisma's default is `onDelete: SetNull`, and `jobId` and
+ * `inlineJobData` are mutually exclusive — losing the job would leave a pipeline
+ * card with no title, company, or score. The guard is part of the `where` so
+ * it's atomic rather than a check-then-write race.
+ *
+ * Returns false when the guard blocked it.
+ */
+export async function archiveLowScore(jobId: string): Promise<boolean> {
+  const { count } = await prisma.job.updateMany({
+    where: { id: jobId, applications: { none: {} } },
+    data: { status: "ARCHIVED", archivedReason: "low_score", description: "" },
+  });
+  return count > 0;
 }
 
 /** Burns one attempt and records why, so a repeatedly-failing job eventually

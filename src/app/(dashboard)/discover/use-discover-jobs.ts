@@ -12,12 +12,22 @@ import type {
 /** Backstop against an unproductive drain loop; the server also caps chunk size. */
 const MAX_DRAIN_BATCHES = 200;
 
+const IDLE_PROGRESS: Omit<ScanProgress, "status"> = {
+  discovered: 0,
+  filtered: 0,
+  scored: 0,
+  archived: 0,
+  queuedAtStart: 0,
+  remaining: 0,
+};
+
 /** All data fetching, filters, selection, and mutation logic for the Discover job list. */
 export function useDiscoverJobs() {
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [minScore, setMinScore] = useState(0);
   const [remoteOnly, setRemoteOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [sortBy, setSortBy] = useState<"newest" | "score">("newest");
   const [page, setPage] = useState(1);
   const [manualUrl, setManualUrl] = useState("");
@@ -27,11 +37,12 @@ export function useDiscoverJobs() {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery<JobsResponse>({
-    queryKey: ["jobs", minScore, remoteOnly, sortBy, page],
+    queryKey: ["jobs", minScore, remoteOnly, showArchived, sortBy, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (minScore > 0) params.set("minScore", String(minScore));
       if (remoteOnly) params.set("remote", "true");
+      if (showArchived) params.set("showArchived", "true");
       params.set("sortBy", sortBy);
       params.set("page", String(page));
       const res = await fetch(`/api/jobs?${params}`);
@@ -80,9 +91,20 @@ export function useDiscoverJobs() {
    * nightly cron picks them up.
    */
   const runDrain = useCallback(
-    async (discovered: number, queuedAtStart: number) => {
+    async (start: { discovered: number; filtered: number; queuedAtStart: number }) => {
+      const { queuedAtStart } = start;
       let scored = 0;
+      let archived = 0;
       let remaining = queuedAtStart;
+
+      const progress = (status: ScanProgress["status"], message?: string): ScanProgress => ({
+        ...start,
+        status,
+        scored,
+        archived,
+        remaining,
+        message,
+      });
 
       for (let batch = 0; remaining > 0 && batch < MAX_DRAIN_BATCHES; batch++) {
         if (drainCancelled.current) return;
@@ -94,20 +116,14 @@ export function useDiscoverJobs() {
           result = (await res.json()) as ScoreBatchResponse;
         } catch (err) {
           if (drainCancelled.current) return;
-          setScanProgress({
-            status: "error",
-            discovered,
-            scored,
-            queuedAtStart,
-            remaining,
-            message: err instanceof Error ? err.message : "Scoring failed",
-          });
+          setScanProgress(progress("error", err instanceof Error ? err.message : "Scoring failed"));
           return;
         }
 
         if (drainCancelled.current) return;
 
         scored += result.scored;
+        archived += result.archived;
         remaining = result.remaining;
 
         // Show each chunk's results as soon as they land.
@@ -117,23 +133,16 @@ export function useDiscoverJobs() {
         // rather than retrying keeps us from hammering it; the rest of the
         // queue is drained by the nightly cron or the next scan.
         if (result.scored === 0 && result.failed === 0) {
-          setScanProgress({
-            status: "paused",
-            discovered,
-            scored,
-            queuedAtStart,
-            remaining,
-            message: "Rate limited — the rest will be scored in the background.",
-          });
+          setScanProgress(
+            progress("paused", "Rate limited — the rest will be scored in the background.")
+          );
           return;
         }
 
-        setScanProgress({ status: "scoring", discovered, scored, queuedAtStart, remaining });
+        setScanProgress(progress("scoring"));
       }
 
-      if (!drainCancelled.current) {
-        setScanProgress({ status: "done", discovered, scored, queuedAtStart, remaining });
-      }
+      if (!drainCancelled.current) setScanProgress(progress("done"));
     },
     [queryClient]
   );
@@ -148,46 +157,36 @@ export function useDiscoverJobs() {
       return res.json() as Promise<DiscoverResponse>;
     },
     onMutate: () => {
-      setScanProgress({
-        status: "ingesting",
-        discovered: 0,
-        scored: 0,
-        queuedAtStart: 0,
-        remaining: 0,
-      });
+      setScanProgress({ ...IDLE_PROGRESS, status: "ingesting" });
     },
     onSuccess: (data) => {
       setPage(1);
       // The rows exist now, just unscored — worth showing immediately.
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
 
+      const start = {
+        discovered: data.discovered,
+        filtered: data.filtered,
+        queuedAtStart: data.remainingToScore,
+      };
+
       if (data.remainingToScore === 0) {
-        setScanProgress({
-          status: "done",
-          discovered: data.discovered,
-          scored: 0,
-          queuedAtStart: 0,
-          remaining: 0,
-        });
+        setScanProgress({ ...IDLE_PROGRESS, ...start, status: "done" });
         return;
       }
 
       setScanProgress({
+        ...IDLE_PROGRESS,
+        ...start,
         status: "scoring",
-        discovered: data.discovered,
-        scored: 0,
-        queuedAtStart: data.remainingToScore,
         remaining: data.remainingToScore,
       });
-      void runDrain(data.discovered, data.remainingToScore);
+      void runDrain(start);
     },
     onError: (err) => {
       setScanProgress({
+        ...IDLE_PROGRESS,
         status: "error",
-        discovered: 0,
-        scored: 0,
-        queuedAtStart: 0,
-        remaining: 0,
         message: err instanceof Error ? err.message : "Scan failed",
       });
     },
@@ -289,6 +288,8 @@ export function useDiscoverJobs() {
     setMinScore,
     remoteOnly,
     setRemoteOnly,
+    showArchived,
+    setShowArchived,
     sortBy,
     setSortBy,
     page,

@@ -40,6 +40,8 @@ function DiscoverPageContent() {
     setMinScore,
     remoteOnly,
     setRemoteOnly,
+    showArchived,
+    setShowArchived,
     sortBy,
     setSortBy,
     page,
@@ -104,6 +106,8 @@ function DiscoverPageContent() {
               onSortByChange={(v) => handleFilterChange(() => setSortBy(v))}
               remoteOnly={remoteOnly}
               onToggleRemoteOnly={() => handleFilterChange(() => setRemoteOnly((v) => !v))}
+              showArchived={showArchived}
+              onToggleShowArchived={() => handleFilterChange(() => setShowArchived((v) => !v))}
               onToggleManual={() => setShowManual((v) => !v)}
             />
 

@@ -3,6 +3,18 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validation";
+import { recomputePrefMatch } from "@/lib/job-ingest";
+import { readJobPreferences } from "@/lib/job-match";
+
+/** The subset of preferences that affects which jobs are worth scoring.
+ * Editing only notification settings shouldn't touch the queue. */
+const JOB_PREFERENCE_KEYS = [
+  "targetRoles",
+  "locations",
+  "salaryMin",
+  "salaryMax",
+  "workType",
+] as const;
 
 const timeOfDaySchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Expected HH:MM (24h)");
 
@@ -58,6 +70,13 @@ export async function PATCH(req: NextRequest) {
     },
     update: { preferences },
   });
+
+  // Changing what you're looking for has to change what gets scored — both
+  // ways. Broadening targetRoles brings previously-skipped jobs back into the
+  // queue; narrowing them takes jobs out of it.
+  if (JOB_PREFERENCE_KEYS.some((key) => key in patch)) {
+    await recomputePrefMatch(user.id, readJobPreferences(preferences));
+  }
 
   return NextResponse.json({ user });
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUserCredentials } from "@/lib/byoc";
 import { fetchAllSources } from "@/lib/job-sources";
 import { ingestJobsForUser } from "@/lib/job-ingest";
+import { readJobPreferences } from "@/lib/job-match";
 import { countQueued } from "@/lib/score-queue";
 
 /**
@@ -31,8 +32,12 @@ export async function POST() {
   if (credError) return credError;
 
   const sourceJobs = await fetchAllSources();
-  const { discovered } = await ingestJobsForUser(user.id, sourceJobs);
+  const { discovered, filtered } = await ingestJobsForUser(
+    user.id,
+    sourceJobs,
+    readJobPreferences(user.preferences)
+  );
   const remainingToScore = await countQueued(user.id);
 
-  return NextResponse.json({ discovered, remainingToScore, total: sourceJobs.length });
+  return NextResponse.json({ discovered, filtered, remainingToScore, total: sourceJobs.length });
 }
