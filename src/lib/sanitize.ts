@@ -1,4 +1,5 @@
 import sanitizeHtml from "sanitize-html";
+import { decode } from "he";
 
 /**
  * Sanitize a job description that may contain HTML.
@@ -44,6 +45,15 @@ export function sanitizeJobDescription(input: string): string {
       }),
     },
   });
+}
+
+/**
+ * Decode HTML entities in sources that send real markup as entity-escaped
+ * text (e.g. `&lt;p&gt;` instead of `<p>`) — must run before sanitizing so
+ * the sanitizer sees real tags to allow/strip instead of re-escaping them.
+ */
+export function decodeHtmlEntities(input: string): string {
+  return decode(input);
 }
 
 /**

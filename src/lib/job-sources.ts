@@ -1,4 +1,4 @@
-import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
+import { sanitizeJobDescription, stripToPlainText, decodeHtmlEntities } from "@/lib/sanitize";
 import { parseHNListing, HN_LOW_CONFIDENCE_NOTICE } from "@/lib/hn-job-parser";
 
 /**
@@ -114,7 +114,7 @@ export async function fetchArbeitnow(): Promise<NormalizedJob[]> {
     title: j.title,
     company: j.company_name,
     location: j.location,
-    description: stripToPlainText(j.description),
+    description: sanitizeJobDescription(decodeHtmlEntities(j.description)),
     remote: j.remote ?? false,
     postedAt: validDate(String(j.published_at)),
   }));
@@ -165,10 +165,14 @@ export async function fetchHNHiring(): Promise<NormalizedJob[]> {
  * than failing it.
  */
 export async function fetchAllSources(): Promise<NormalizedJob[]> {
-  const [remotive, arbeitnow, hn] = await Promise.all([
+  const [
+    remotive,
+    arbeitnow,
+    // hn
+  ] = await Promise.all([
     fetchRemotive(),
     fetchArbeitnow(),
-    fetchHNHiring(),
+    // fetchHNHiring(),
   ]);
-  return [...remotive, ...arbeitnow, ...hn];
+  return [...remotive, ...arbeitnow];
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeJobDescription, stripToPlainText } from "@/lib/sanitize";
+import { sanitizeJobDescription, stripToPlainText, decodeHtmlEntities } from "@/lib/sanitize";
 
 describe("sanitizeJobDescription", () => {
   it("strips script tags and their contents", () => {
@@ -55,5 +55,36 @@ describe("stripToPlainText", () => {
 
   it("collapses whitespace and trims", () => {
     expect(stripToPlainText("  Hello   \n\n  World  ")).toBe("Hello World");
+  });
+});
+
+describe("decodeHtmlEntities", () => {
+  it("decodes common named entities", () => {
+    expect(decodeHtmlEntities("&lt;div&gt;")).toBe("<div>");
+    expect(decodeHtmlEntities("Tom &amp; Jerry")).toBe("Tom & Jerry");
+    expect(decodeHtmlEntities("&quot;quoted&quot;")).toBe('"quoted"');
+    expect(decodeHtmlEntities("a&nbsp;b")).toBe("a b");
+  });
+
+  it("is a no-op on plain text with no entities", () => {
+    expect(decodeHtmlEntities("Just plain text, no markup here.")).toBe(
+      "Just plain text, no markup here."
+    );
+  });
+});
+
+describe("Arbeitnow double-escaped description regression", () => {
+  it("decodes entity-escaped HTML into real tags before sanitizing", () => {
+    const raw = "&lt;div&gt;&lt;p&gt;Hello&lt;/p&gt;&lt;/div&gt;";
+    const out = sanitizeJobDescription(decodeHtmlEntities(raw));
+    expect(out).toBe("<p>Hello</p>");
+    expect(out).not.toContain("&lt;");
+    expect(out).not.toContain("&gt;");
+  });
+
+  it("leaves already-plain descriptions readable", () => {
+    const raw = "This role requires 5 years of experience.";
+    const out = sanitizeJobDescription(decodeHtmlEntities(raw));
+    expect(out).toBe("This role requires 5 years of experience.");
   });
 });
