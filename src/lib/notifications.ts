@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail, type EmailCredentials } from "@/lib/email";
+import { buildNotificationEmail } from "@/lib/email-templates";
 
 webpush.setVapidDetails(
   `mailto:${process.env.VAPID_CONTACT_EMAIL ?? "admin@example.com"}`,
@@ -91,13 +92,14 @@ export async function notifyUser({
   let emailed = false;
   if (emailCredentials && userEmail) {
     try {
+      const { textContent, htmlContent } = buildNotificationEmail({ type, title, body, url });
       await sendTransactionalEmail({
         apiKey: emailCredentials.apiKey,
         fromEmail: emailCredentials.fromEmail,
         toEmail: userEmail,
         subject: title,
-        textContent: body,
-        url,
+        textContent,
+        htmlContent,
       });
       emailed = true;
     } catch (err) {
