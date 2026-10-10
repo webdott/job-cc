@@ -33,7 +33,6 @@ export function useDiscoverJobs() {
   const [manualUrl, setManualUrl] = useState("");
   const [showManual, setShowManual] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery<JobsResponse>({
@@ -272,10 +271,6 @@ export function useDiscoverJobs() {
     setPage(1);
   }, []);
 
-  function markSaved(id: string) {
-    setSavedJobIds((prev) => new Set(prev).add(id));
-  }
-
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
@@ -300,8 +295,6 @@ export function useDiscoverJobs() {
     setShowManual,
     selectedJob,
     setSelectedJob,
-    savedJobIds,
-    markSaved,
     checkedIds,
     setCheckedIds,
     scanMutation,

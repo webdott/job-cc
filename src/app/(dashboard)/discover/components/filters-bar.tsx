@@ -77,11 +77,11 @@ export function FiltersBar({
         Remote
       </button>
 
-      {/* Escape hatch for anything the prefilter or the score threshold hid, so
-          no job is ever invisible and unreachable. */}
+      {/* Escape hatch for anything the prefilter, the score threshold, or a
+          rejection hid, so no job is ever invisible and unreachable. */}
       <button
         onClick={onToggleShowArchived}
-        title="Include jobs that don't match your target roles or scored too low"
+        title="Include jobs that don't match your target roles, scored too low, or were rejected"
         className={cn(
           "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
           showArchived

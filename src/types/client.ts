@@ -21,6 +21,12 @@ export interface ClientJobEvaluation {
   blockB?: { strengths?: string[]; gaps?: string[] } | null;
 }
 
+export interface ClientJobApplication {
+  id: string;
+  /** A stage key — one of the user's own `Stage.key`s or a fixed terminal outcome. */
+  stage: string;
+}
+
 export interface ClientJob {
   id: string;
   title: string;
@@ -39,4 +45,6 @@ export interface ClientJob {
   /** "low_score" | "user", set when status is ARCHIVED. */
   archivedReason: string | null;
   evaluation: ClientJobEvaluation | null;
+  /** 0 or 1 entries — `POST /api/applications` refuses duplicates per job. */
+  applications: ClientJobApplication[];
 }

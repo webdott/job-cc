@@ -75,6 +75,69 @@ describe("GET /api/jobs", () => {
     expect(body.total).toBe(3);
   });
 
+  describe("applications", () => {
+    async function seedBoard(userId: string) {
+      const open = await createJob(userId, "open", { prefMatch: true });
+      const saved = await createJob(userId, "saved", { prefMatch: true });
+      const rejected = await createJob(userId, "rejected", { prefMatch: true });
+      await prisma.application.create({ data: { userId, jobId: saved.id, stage: "Applied" } });
+      await prisma.application.create({ data: { userId, jobId: rejected.id, stage: "Rejected" } });
+      return { open, saved, rejected };
+    }
+
+    it("hides jobs whose application was rejected, like any other skipped job", async () => {
+      // A rejected job kept resurfacing in Discover and in the home page's top
+      // matches as if it were still open.
+      const user = await createTestUser();
+      mockAuth.mockResolvedValue({ userId: user.clerkId });
+      await seedBoard(user.id);
+
+      const body = await (await GET(listRequest())).json();
+      const titles = body.jobs.map((j: { title: string }) => j.title).sort();
+
+      expect(titles).toEqual(["Job open", "Job saved"]);
+      expect(body.total).toBe(2);
+
+      const revealed = await (await GET(listRequest("?showArchived=true"))).json();
+      expect(revealed.total).toBe(3);
+    });
+
+    it("attaches the job's application so the client can show its pipeline state", async () => {
+      // "Saved" used to live only in client state and was forgotten on reload,
+      // so a job already on the board looked unsaved until it was reopened.
+      const user = await createTestUser();
+      mockAuth.mockResolvedValue({ userId: user.clerkId });
+      const { open, saved } = await seedBoard(user.id);
+
+      const body = await (await GET(listRequest())).json();
+      const byId = new Map(
+        body.jobs.map((j: { id: string; applications: { stage: string }[] }) => [
+          j.id,
+          j.applications,
+        ])
+      );
+
+      expect(byId.get(open.id)).toEqual([]);
+      expect(byId.get(saved.id)).toEqual([{ id: expect.any(String), stage: "Applied" }]);
+    });
+
+    it("ignores another user's application on the same posting", async () => {
+      const user = await createTestUser();
+      const other = await createTestUser();
+      mockAuth.mockResolvedValue({ userId: user.clerkId });
+      const mine = await createJob(user.id, "shared", { prefMatch: true });
+      const theirs = await createJob(other.id, "shared", { prefMatch: true });
+      await prisma.application.create({
+        data: { userId: other.id, jobId: theirs.id, stage: "Rejected" },
+      });
+
+      const body = await (await GET(listRequest())).json();
+
+      expect(body.jobs.map((j: { id: string }) => j.id)).toEqual([mine.id]);
+      expect(body.jobs[0].applications).toEqual([]);
+    });
+  });
+
   describe("minScore", () => {
     async function seedScored(userId: string) {
       for (const [slug, score] of [

@@ -12,18 +12,18 @@ import {
   DollarSign,
   Bookmark,
   Check,
+  Ban,
   ArrowUpRight,
 } from "lucide-react";
 import { useState } from "react";
 import { useIsMobileViewport } from "@/lib/use-is-mobile-viewport";
+import { getJobPipelineState, type JobPipelineState } from "@/lib/job-pipeline-state";
 import { JobDescription } from "@/components/application-detail/shared";
 import type { ClientJob as Job } from "@/types/client";
 
 interface JobDetailSheetProps {
   job: Job | null;
   onClose: () => void;
-  savedJobIds: Set<string>;
-  onSave: (jobId: string) => void;
 }
 
 function ScoreBadge({
@@ -47,14 +47,43 @@ function ScoreBadge({
   );
 }
 
-export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailSheetProps) {
-  const [saved, setSaved] = useState(false);
+function SaveButtonContent({ state, pending }: { state: JobPipelineState; pending: boolean }) {
+  switch (state) {
+    case "saved":
+      return (
+        <>
+          <Check className="h-4 w-4" />
+          Saved
+        </>
+      );
+    case "rejected":
+      return (
+        <>
+          <Ban className="h-4 w-4" />
+          Rejected
+        </>
+      );
+    case "none":
+      return pending ? (
+        "Saving…"
+      ) : (
+        <>
+          <Bookmark className="h-4 w-4" />
+          Save
+        </>
+      );
+  }
+}
+
+export function JobDetailSheet({ job, onClose }: JobDetailSheetProps) {
+  // The server-derived state comes from the `job` prop; this only bridges the
+  // gap between a save landing and the list refetching with the new row.
+  const [savedThisSession, setSavedThisSession] = useState(false);
   const queryClient = useQueryClient();
 
-  // Reset saved state when job changes
   useEffect(() => {
-    if (job) setSaved(savedJobIds.has(job.id));
-  }, [job, savedJobIds]);
+    setSavedThisSession(false);
+  }, [job?.id]);
 
   // Close on Escape
   useEffect(() => {
@@ -74,10 +103,11 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
       });
       return res.json();
     },
-    onSuccess: (_, jobId) => {
-      setSaved(true);
-      onSave(jobId);
+    onSuccess: () => {
+      setSavedThisSession(true);
       queryClient.invalidateQueries({ queryKey: ["applications"] });
+      // Discover's "Saved" tag is read off the server, so refetch the list.
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
   });
 
@@ -86,6 +116,8 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
   if (!job) return null;
 
   const evaluation = job.evaluation;
+  const pipelineState: JobPipelineState = savedThisSession ? "saved" : getJobPipelineState(job);
+  const onBoard = pipelineState !== "none";
 
   return (
     <>
@@ -233,28 +265,19 @@ export function JobDetailSheet({ job, onClose, savedJobIds, onSave }: JobDetailS
         <div className="p-4 border-t border-border shrink-0 flex gap-2">
           {/* Save to pipeline */}
           <button
-            onClick={() => !saved && saveMutation.mutate(job.id)}
-            disabled={saved || saveMutation.isPending}
+            onClick={() => !onBoard && saveMutation.mutate(job.id)}
+            disabled={onBoard || saveMutation.isPending}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors",
-              saved
-                ? "bg-green-500/15 text-green-400 border border-green-500/20 cursor-default"
-                : "bg-muted border border-border hover:border-blue-500/40 text-foreground disabled:opacity-60"
+              pipelineState === "saved" &&
+                "bg-green-500/15 text-green-400 border border-green-500/20 cursor-default",
+              pipelineState === "rejected" &&
+                "bg-red-600/15 text-red-700 border border-red-600/20 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20 cursor-default",
+              pipelineState === "none" &&
+                "bg-muted border border-border hover:border-blue-500/40 text-foreground disabled:opacity-60"
             )}
           >
-            {saved ? (
-              <>
-                <Check className="h-4 w-4" />
-                Saved
-              </>
-            ) : saveMutation.isPending ? (
-              "Saving…"
-            ) : (
-              <>
-                <Bookmark className="h-4 w-4" />
-                Save
-              </>
-            )}
+            <SaveButtonContent state={pipelineState} pending={saveMutation.isPending} />
           </button>
 
           {/* Apply — opens the original job posting */}

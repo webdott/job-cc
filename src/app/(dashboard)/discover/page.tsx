@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { RefreshCw, Search } from "lucide-react";
 import { JobDetailSheet } from "@/components/job-detail-sheet";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { getJobPipelineState } from "@/lib/job-pipeline-state";
 import { useDiscoverJobs } from "./use-discover-jobs";
 import { JobCardSkeleton } from "./components/job-card-skeleton";
 import { JobCard } from "./components/job-card";
@@ -52,8 +53,6 @@ function DiscoverPageContent() {
     setShowManual,
     selectedJob,
     setSelectedJob,
-    savedJobIds,
-    markSaved,
     checkedIds,
     setCheckedIds,
     scanMutation,
@@ -147,7 +146,7 @@ function DiscoverPageContent() {
                   <JobCard
                     key={job.id}
                     job={job}
-                    isSaved={savedJobIds.has(job.id)}
+                    pipelineState={getJobPipelineState(job)}
                     isSelected={selectedJob?.id === job.id}
                     isChecked={checkedIds.has(job.id)}
                     deleteDisabled={deleteMutation.isPending}
@@ -168,14 +167,7 @@ function DiscoverPageContent() {
       </div>
 
       {/* Right: Job detail panel */}
-      {selectedJob && (
-        <JobDetailSheet
-          job={selectedJob}
-          onClose={() => setSelectedJob(null)}
-          savedJobIds={savedJobIds}
-          onSave={markSaved}
-        />
-      )}
+      {selectedJob && <JobDetailSheet job={selectedJob} onClose={() => setSelectedJob(null)} />}
     </div>
   );
 }

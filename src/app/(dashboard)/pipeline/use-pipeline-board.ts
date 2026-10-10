@@ -71,13 +71,19 @@ export function usePipelineBoard() {
     onError: (_err, _vars, context) => {
       if (context?.prev) queryClient.setQueryData(["applications"], context.prev);
     },
+    // Discover hides jobs whose application is Rejected and tags the rest as
+    // Saved, both read off the server — so a stage change must refresh it.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await fetch(`/api/applications/${id}`, { method: "DELETE" });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["applications"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
   });
 
   const bulkDeleteMutation = useMutation({
@@ -88,6 +94,7 @@ export function usePipelineBoard() {
       if (selectedAppId && checkedIds.has(selectedAppId)) setSelectedAppId(null);
       setCheckedIds(new Set());
       queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
   });
 
