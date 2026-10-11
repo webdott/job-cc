@@ -12,6 +12,11 @@ export const INACTIVE_STAGES = [
   { key: "Archived", label: "Archived", color: "bg-neutral-500" },
 ] as const;
 
+// The one default stage with product meaning beyond the Kanban: a job whose
+// application sits here is hidden from Discover. Keys are stable across
+// renames (see PATCH /api/stages/:id), so matching on it is safe.
+export const REJECTED_STAGE_KEY = "Rejected";
+
 export const DEFAULT_STAGES = [
   { key: "Saved", label: "Saved", color: "bg-slate-500" },
   { key: "Applied", label: "Applied", color: "bg-blue-500" },

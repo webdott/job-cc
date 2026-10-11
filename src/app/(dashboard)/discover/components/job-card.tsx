@@ -2,12 +2,32 @@
 
 import { cn } from "@/lib/utils";
 import { MapPin, Wifi, DollarSign, Trash2, CheckSquare, Square } from "lucide-react";
+import type { JobPipelineState } from "@/lib/job-pipeline-state";
 import type { Job } from "../types";
 import { ScoreBadge } from "./score-badge";
 
+function PipelineTag({ state }: { state: JobPipelineState }) {
+  switch (state) {
+    case "none":
+      return null;
+    case "saved":
+      return (
+        <span className="text-[10px] text-green-400 font-medium px-1.5 py-0.5 bg-green-500/10 rounded-full">
+          Saved
+        </span>
+      );
+    case "rejected":
+      return (
+        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-600/15 text-red-700 dark:bg-red-500/15 dark:text-red-400">
+          Rejected
+        </span>
+      );
+  }
+}
+
 export function JobCard({
   job,
-  isSaved,
+  pipelineState,
   isSelected,
   isChecked,
   deleteDisabled,
@@ -16,7 +36,7 @@ export function JobCard({
   onDelete,
 }: {
   job: Job;
-  isSaved: boolean;
+  pipelineState: JobPipelineState;
   isSelected: boolean;
   isChecked: boolean;
   deleteDisabled: boolean;
@@ -55,11 +75,7 @@ export function JobCard({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ScoreBadge score={job.evaluation?.overallScore ?? null} />
-          {isSaved && (
-            <span className="text-[10px] text-green-400 font-medium px-1.5 py-0.5 bg-green-500/10 rounded-full">
-              Saved
-            </span>
-          )}
+          <PipelineTag state={pipelineState} />
           <button
             onClick={(e) => {
               e.stopPropagation();

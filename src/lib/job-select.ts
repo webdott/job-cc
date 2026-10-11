@@ -11,6 +11,11 @@ import type { Prisma } from "@prisma/client";
  * `status`, `prefMatch` and `archivedReason` are included deliberately: with the
  * "Show skipped" toggle the list can contain hidden jobs, and the UI needs to
  * say *why* each one was hidden.
+ *
+ * `applications` is what lets Discover show "Saved" from the server rather than
+ * from per-session client state (which forgot every save on reload), and lets
+ * it tag rejected jobs when they're revealed. `POST /api/applications` refuses
+ * a second application for the same job, so this is 0 or 1 rows in practice.
  */
 export const JOB_CLIENT_SELECT = {
   id: true,
@@ -33,5 +38,8 @@ export const JOB_CLIENT_SELECT = {
       blockA: true,
       blockB: true,
     },
+  },
+  applications: {
+    select: { id: true, stage: true },
   },
 } satisfies Prisma.JobSelect;

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { parseBody } from "@/lib/validation";
 import { PREF_MATCH_ELIGIBLE } from "@/lib/score-queue";
 import { JOB_CLIENT_SELECT } from "@/lib/job-select";
+import { REJECTED_STAGE_KEY } from "@/lib/stage-constants";
 
 const DeleteJobSchema = z.object({
   id: z.string().min(1),
@@ -33,11 +34,17 @@ export async function GET(req: NextRequest) {
     ...(remoteOnly ? [{ remote: true }] : []),
   ];
 
-  // Hidden by default: jobs that scored below the threshold, and jobs that
-  // don't match the user's target roles. Both stay reachable via
-  // ?showArchived=true so nothing is invisible AND unrecoverable.
+  // Hidden by default: jobs that scored below the threshold, jobs that don't
+  // match the user's target roles, and jobs whose application the user has
+  // already moved to Rejected — those kept resurfacing in the list and in the
+  // home page's top matches as if they were still open. All three stay
+  // reachable via ?showArchived=true so nothing is invisible AND unrecoverable.
   if (!showArchived) {
-    conditions.push({ status: { not: "ARCHIVED" } }, { OR: PREF_MATCH_ELIGIBLE });
+    conditions.push(
+      { status: { not: "ARCHIVED" } },
+      { OR: PREF_MATCH_ELIGIBLE },
+      { NOT: { applications: { some: { stage: REJECTED_STAGE_KEY } } } }
+    );
   }
 
   if (minScore !== undefined && minScore > 0) {
